@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { BUDGET_ENABLED, HANDOFF_ENABLED } from "./config.js"
+import { BUDGET_ENABLED, HANDOFF_ENABLED } from "./core/config.js"
 import { SessionBudgetPlugin } from "./session-budget.js"
 import { HandoffPlugin } from "./handoff.js"
 

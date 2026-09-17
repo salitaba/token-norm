@@ -5,7 +5,7 @@ vi.hoisted(() => {
   process.env.TOKEN_NORM_PHASE_WEIGHTS = "plan=0.5,build=2"
 })
 
-import { UsageTracker, effectiveFresh, median, bloat, attribution, type StepTokens } from "../src/usage.js"
+import { UsageTracker, effectiveFresh, median, bloat, attribution, type StepTokens } from "../src/core/usage.js"
 
 type PartialSteps = Omit<Partial<StepTokens>, "cache"> & { cache?: Partial<StepTokens["cache"]> }
 

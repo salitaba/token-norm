@@ -10,10 +10,10 @@ vi.hoisted(() => {
   process.env.TOKEN_NORM_LOG = `${base}${sep}token-norm-handoff-test-${process.pid}.log`
 })
 
-vi.mock("../src/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
+vi.mock("../src/core/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
 
 import { HandoffPlugin } from "../src/handoff.js"
-import { log } from "../src/log.js"
+import { log } from "../src/core/log.js"
 
 const DIR = process.env.TOKEN_NORM_HANDOFF_DIR!
 

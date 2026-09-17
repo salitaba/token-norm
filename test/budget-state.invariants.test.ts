@@ -9,11 +9,11 @@ import {
   type PolicyInput,
   type PolicySections,
   type PolicyState,
-} from "../src/budget/policy.js"
-import { ANNOUNCE_AT, type BudgetMode } from "../src/config.js"
+} from "../src/core/budget/policy.js"
+import { ANNOUNCE_AT, type BudgetMode } from "../src/core/config.js"
 import { recommendationFor, snapshotFrom } from "../src/status.js"
-import { state, track } from "../src/budget/state.js"
-import { UsageTracker, type StepTokens } from "../src/usage.js"
+import { state, track } from "../src/core/budget/state.js"
+import { UsageTracker, type StepTokens } from "../src/core/usage.js"
 
 const ROOT = "ses_root"
 const CHEAP = new Set(["todowrite", "question", "skill"])

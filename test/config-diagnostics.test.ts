@@ -36,7 +36,7 @@ async function freshConfig(env: Record<string, string> = {}): Promise<any> {
   vi.resetModules()
   for (const key of TOUCHED) delete process.env[key]
   for (const [key, value] of Object.entries(env)) process.env[key] = value
-  return import("../src/config.js")
+  return import("../src/core/config.js")
 }
 
 async function diagnose(env: Record<string, string>): Promise<any[]> {
@@ -171,7 +171,7 @@ describe("logConfigDiagnostics", () => {
     for (const key of TOUCHED) delete process.env[key]
     process.env.TOKEN_NORM_MODE = "nope"
     const logPath = process.env.TOKEN_NORM_LOG!
-    const { logConfigDiagnostics } = await import("../src/log.js")
+    const { logConfigDiagnostics } = await import("../src/core/log.js")
 
     const lines = logConfigDiagnostics()
     expect(lines).toHaveLength(1)
@@ -187,7 +187,7 @@ describe("logConfigDiagnostics", () => {
   it("returns nothing and writes nothing when the config is clean", async () => {
     vi.resetModules()
     for (const key of TOUCHED) delete process.env[key]
-    const { logConfigDiagnostics } = await import("../src/log.js")
+    const { logConfigDiagnostics } = await import("../src/core/log.js")
     expect(logConfigDiagnostics()).toEqual([])
   })
 })

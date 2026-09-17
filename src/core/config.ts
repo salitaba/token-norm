@@ -1,3 +1,4 @@
+import fs from "node:fs"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
@@ -137,11 +138,43 @@ export const HANDOFF_DIR = env("TOKEN_NORM_HANDOFF_DIR") || path.join(DATA_HOME,
 
 export const LOG_PATH = env("TOKEN_NORM_LOG") || path.join(DATA_HOME, "opencode", "token-norm.log")
 
+/** Session counters live under XDG_STATE_HOME, not XDG_DATA_HOME: they are
+ * state the program reproduces on its own and that a user may delete without
+ * losing anything they authored, which is exactly the distinction the two
+ * directories draw. Handoff notes stay in DATA_HOME -- those the user wrote. */
+const STATE_HOME = process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state")
+
+/** Per-host so two hosts observing the same machine cannot collide on a
+ * session id, and so uninstalling one host's hooks leaves the others alone. */
+export function stateDir(host: string): string {
+  const override = env("TOKEN_NORM_STATE_DIR")
+  return override ? path.join(override, host) : path.join(STATE_HOME, "token-norm", host)
+}
+
 /** Resolved relative to the installed package, not to the user's config dir,
- * so the bundled script is found wherever npm/bun placed the package. */
-export const AUDIT_SCRIPT =
-  env("TOKEN_NORM_AUDIT_SCRIPT") ||
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "scripts", "usage-audit.py")
+ * so the bundled script is found wherever npm/bun placed the package.
+ *
+ * Found by walking up rather than by a fixed count of "..", because no single
+ * depth is right for every build of this file: tsc emits it to dist/core/,
+ * esbuild inlines it into a bundle at dist/, and vitest loads it from src/core/.
+ * A hard-coded "../scripts" silently pointed at a directory that does not exist
+ * in two of those three layouts. */
+function packagedAuditScript(): string {
+  const start = path.dirname(fileURLToPath(import.meta.url))
+  let dir = start
+  for (let up = 0; up < 5; up++) {
+    const candidate = path.join(dir, "scripts", "usage-audit.py")
+    if (fs.existsSync(candidate)) return candidate
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  // Nothing found: name the conventional location so the error message the
+  // audit prints points somewhere a user can act on.
+  return path.join(start, "..", "scripts", "usage-audit.py")
+}
+
+export const AUDIT_SCRIPT = env("TOKEN_NORM_AUDIT_SCRIPT") || packagedAuditScript()
 
 export const PYTHON = env("TOKEN_NORM_PYTHON") || "python3"
 

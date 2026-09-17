@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, type Mock } from "vitest"
 
-vi.mock("../src/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
-vi.mock("../src/audit.js", () => ({ runAudit: vi.fn(() => "effective fresh tokens: 123k") }))
+vi.mock("../src/core/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
+vi.mock("../src/core/audit.js", () => ({ runAudit: vi.fn(() => "effective fresh tokens: 123k") }))
 
 const ZERO_TOKENS = { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
 
@@ -29,7 +29,7 @@ async function load(env: Record<string, string> = {}): Promise<{ hooks: any; run
   vi.resetModules()
   for (const key of MANAGED_ENV) delete process.env[key]
   for (const [key, value] of Object.entries(env)) process.env[key] = value
-  const audit = await import("../src/audit.js")
+  const audit = await import("../src/core/audit.js")
   const mod = await import("../src/session-budget.js")
   const hooks = await mod.SessionBudgetPlugin({ client: undefined } as never)
   return { hooks, runAudit: audit.runAudit as unknown as Mock }

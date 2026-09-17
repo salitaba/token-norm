@@ -18,21 +18,21 @@
 // call: a wrong guess here must cost a few lines of text, not a broken session.
 
 import type { Plugin, PluginInput } from "@opencode-ai/plugin"
-import { runAudit } from "../audit.js"
-import { asNormEvent, type BudgetClient, type NormEvent, type ToastClient } from "../host.js"
-import { log, logConfigDiagnostics } from "../log.js"
-import { ANNOUNCE_AT, AUDIT_EVERY, BOUNDARY_AT, CHEAP_TOOLS, MAX_COST, MAX_EFFECTIVE_TOKENS, MODE } from "../config.js"
-import { blockMessage, budgetSection, contextLimitFor, measure, takeCrossings } from "./evaluator.js"
-import { note } from "./format.js"
-import { evaluatePolicy, maxState, ordinal, renderPolicy, type PolicySections, type PolicyState } from "./policy.js"
+import { runAudit } from "../core/audit.js"
+import { asNormEvent, type BudgetClient, type NormEvent, type ToastClient } from "../core/host.js"
+import { log, logConfigDiagnostics } from "../core/log.js"
+import { ANNOUNCE_AT, AUDIT_EVERY, BOUNDARY_AT, CHEAP_TOOLS, MAX_COST, MAX_EFFECTIVE_TOKENS, MODE } from "../core/config.js"
+import { blockMessage, budgetSection, contextLimitFor, measure, takeCrossings } from "../core/budget/evaluator.js"
+import { note } from "../core/budget/format.js"
+import { evaluatePolicy, maxState, ordinal, renderPolicy, type PolicySections, type PolicyState } from "../core/budget/policy.js"
 import {
   announceReminder,
   auditReminder,
   boundaryReminder,
   compactionContext,
   handoffLines,
-} from "./reminders.js"
-import { SEEN_MESSAGES_MAX, state, topTools, track, usage, type SessionState } from "./state.js"
+} from "../core/budget/reminders.js"
+import { SEEN_MESSAGES_MAX, state, topTools, track, usage, type SessionState } from "../core/budget/state.js"
 import { createStatusTool, snapshotFrom, type StatusProvider } from "../status.js"
 
 const HANDOFF_TOOL = "handoff"

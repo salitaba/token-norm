@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Session state moved behind a store interface.** `budget/state.ts` kept its
+  counters in a module-level `Map`, which is correct only while the process
+  outlives the session — true for the OpenCode plugin, false for hosts whose
+  hooks are a fresh process per tool call. It now uses `src/runtime/store.ts`,
+  which offers an in-memory backend (what OpenCode keeps using, unchanged) and a
+  disk backend that writes one JSON file per session atomically. No behaviour
+  change: OpenCode takes the same path it always did.
+- **Host-neutral modules moved under `src/core/`.** Config, logging, audit,
+  usage, host event shapes and the whole budget policy layer now live there and
+  import no host SDK. `status.ts` was split into `src/core/status.ts`
+  (accounting) and `src/status.ts` (the OpenCode `tool()` wrapper).
+- `doctor` reads the compiled config from `dist/core/config.js`, falling back to
+  the pre-move `dist/config.js`, so it still reports settings against an older
+  installed package.
+
+### Added
+
+- `TOKEN_NORM_STATE_DIR` overrides where session state is written. The default
+  is `$XDG_STATE_HOME/token-norm/<host>` — state the program rebuilds on its
+  own, so it belongs under the state directory rather than beside the handoff
+  notes the user authored.
+
 ## [0.11.0] - 2026-09-12
 
 ### Added

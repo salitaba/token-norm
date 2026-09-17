@@ -17,9 +17,9 @@ import { tool, type Plugin, type PluginInput } from "@opencode-ai/plugin"
 import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
-import { HANDOFF_DIR, SETTLE_MS, SWITCH_WAIT } from "./config.js"
-import { asNormEvent, type HandoffClient } from "./host.js"
-import { log, logConfigDiagnostics } from "./log.js"
+import { HANDOFF_DIR, SETTLE_MS, SWITCH_WAIT } from "./core/config.js"
+import { asNormEvent, type HandoffClient } from "./core/host.js"
+import { log, logConfigDiagnostics } from "./core/log.js"
 
 // The TUI processes /tui/execute-command asynchronously: the request returns
 // once the command is dispatched, not once the new session is mounted.

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("node:child_process", () => ({ execFileSync: vi.fn() }))
 
 import { execFileSync } from "node:child_process"
-import { runAudit } from "../src/audit.js"
+import { runAudit } from "../src/core/audit.js"
 
 const exec = vi.mocked(execFileSync)
 

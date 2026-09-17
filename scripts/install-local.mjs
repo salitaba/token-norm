@@ -233,9 +233,12 @@ function checkDuplicateRegistration() {
  * so doctor cannot disagree with what the plugin will actually do. Skipped
  * when the tsc build is absent (a fresh checkout that only ran build:plugin). */
 async function checkSettings() {
-  const config = join(pkgRoot, "dist", "config.js")
-  if (!existsSync(config)) {
-    warn("settings", "not checked (no dist/config.js in this package)")
+  // dist/config.js is where the pre-0.12 layout put it; dist/core/config.js is
+  // where it lives now. Both are accepted so doctor keeps working against an
+  // older installed package instead of reporting a silent "not checked".
+  const config = [join(pkgRoot, "dist", "core", "config.js"), join(pkgRoot, "dist", "config.js")].find(existsSync)
+  if (!config) {
+    warn("settings", "not checked (no compiled config.js in this package)")
     return
   }
   try {

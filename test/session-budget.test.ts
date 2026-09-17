@@ -7,11 +7,11 @@ vi.hoisted(() => {
   process.env.TOKEN_NORM_CHEAP_TOOLS = "todowrite,question,skill"
 })
 
-vi.mock("../src/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
-vi.mock("../src/audit.js", () => ({ runAudit: vi.fn(() => "effective fresh tokens: 123k") }))
+vi.mock("../src/core/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
+vi.mock("../src/core/audit.js", () => ({ runAudit: vi.fn(() => "effective fresh tokens: 123k") }))
 
-import { runAudit } from "../src/audit.js"
-import { log } from "../src/log.js"
+import { runAudit } from "../src/core/audit.js"
+import { log } from "../src/core/log.js"
 import { SessionBudgetPlugin } from "../src/session-budget.js"
 
 const hooks = await SessionBudgetPlugin({} as never)
@@ -203,7 +203,7 @@ describe("SessionBudgetPlugin tier 1 budgets", () => {
     process.env.TOKEN_NORM_CONTEXT_WARN = "0.5"
     process.env.TOKEN_NORM_MAX_COST = "0.50"
     process.env.TOKEN_NORM_MAX_TOOL_CALLS = "0"
-    const cfg = await import("../src/config.js")
+    const cfg = await import("../src/core/config.js")
     expect(cfg.MODE).toBe("warn")
     expect(cfg.CONTEXT_WARN).toBe(0.5)
     expect(cfg.MAX_COST).toBe(0.5)

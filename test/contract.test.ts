@@ -20,10 +20,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("../src/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
-vi.mock("../src/audit.js", () => ({ runAudit: vi.fn(() => "effective fresh tokens: 1k") }))
+vi.mock("../src/core/log.js", () => ({ log: vi.fn(), logConfigDiagnostics: vi.fn(() => []) }))
+vi.mock("../src/core/audit.js", () => ({ runAudit: vi.fn(() => "effective fresh tokens: 1k") }))
 
-import { runAudit } from "../src/audit.js"
+import { runAudit } from "../src/core/audit.js"
 
 const ENV_KEYS = [
   "TOKEN_NORM_MODE",

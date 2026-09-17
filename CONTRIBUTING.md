@@ -19,13 +19,22 @@ npm run build
 
 ## Project layout
 
+`src/core/` is host-neutral: it imports no host SDK, takes numbers in and
+returns text out. Everything outside it knows what an OpenCode plugin is. Keep
+that line intact — it is what lets the same policy run under other hosts.
+
 | Path | Contents |
 | --- | --- |
 | `src/index.ts` | Plugin entrypoint and exports |
-| `src/session-budget.ts` | Tool-call counting and threshold reminders |
+| `src/session-budget.ts` | Re-export of the budget plugin |
+| `src/budget/plugin.ts` | Tool-call counting and threshold reminders (OpenCode-bound) |
 | `src/handoff.ts` | The `handoff` tool |
-| `src/audit.ts` | Usage audit integration |
-| `src/config.ts`, `src/log.ts` | Config and logging helpers |
+| `src/status.ts` | The `tool()` wrapper around `src/core/status.ts` |
+| `src/core/audit.ts` | Usage audit integration |
+| `src/core/config.ts`, `src/core/log.ts` | Config and logging helpers |
+| `src/core/usage.ts`, `src/core/host.ts` | Token accounting and host event shapes |
+| `src/core/budget/` | Policy, evaluation, reminders, and session state |
+| `src/runtime/store.ts` | Session-state backends: in-memory and disk |
 | `scripts/usage-audit.py` | Session usage/cost audit |
 | `test/` | Vitest regression tests for thresholds, boundaries, and handoff |
 | `docs/RELEASING.md` | Release process (maintainers) |
