@@ -7,11 +7,15 @@
 
 ### Your token rules are advice. This makes them mechanical.
 
-Runtime guardrails for [OpenCode](https://opencode.ai) coding agents. A long
-session drifts: a new task inherits the last one's "do everything" override, the
-audit you told it to run never happens, and you find out at 184 tool calls.
-Token Norm counts the spend and staples the checkpoint onto output the agent is
-already reading.
+Runtime guardrails for coding agents. A long session drifts: a new task inherits
+the last one's "do everything" override, the audit you told it to run never
+happens, and you find out at 184 tool calls. Token Norm counts the spend and
+staples the checkpoint onto output the agent is already reading.
+
+It began as an [OpenCode](https://opencode.ai) plugin and the name stuck. The
+mechanism was never OpenCode-specific — count the spend, staple the checkpoint
+onto output the agent is already reading — so the same enforcement core now runs
+behind more than one host adapter. [Host support](#host-support) is below.
 
 ```sh
 npx opencode-token-norm
@@ -58,7 +62,28 @@ An adoption ladder, not a switch. `TOKEN_NORM_MODE`, default `handoff`:
 Only `block` can fail a tool call, and only on a limit you set — pressure alone
 never strands a session. Cheap tools and `handoff` stay open as the exit.
 
-## Install
+## Host support
+
+| Host | Install | Cost axis | Context axis | Verified |
+|---|---|---|---|---|
+| [OpenCode](https://opencode.ai) | `npx opencode-token-norm` | measured | measured | 1.18.30 |
+| [Claude Code](https://claude.com/claude-code) | `npx opencode-token-norm install --host claude` | inert — transcripts carry tokens, not prices | opt-in, via `TOKEN_NORM_CONTEXT_LIMIT` | 2.1.274 |
+| Codex | no installer yet | — | — | not yet |
+
+OpenCode is the reference host, where both axes are measured in-process. The
+other hosts are ports of the same enforcement core behind a per-host adapter, and
+each one reports what it cannot measure rather than reporting a zero. The
+thresholds, the audit, the reminder text and the handoff note are host-independent;
+only the event names and the measurable axes differ. Port notes:
+[docs/multi-host-port.md](https://github.com/salitaba/opencode-token-norm/blob/main/docs/multi-host-port.md).
+
+**Codex is not installable yet, and says so.** The adapter, its measurement layer
+and the rollout reader are written and unit-tested, but there is no installer, no
+bundle in the published package, and no live Codex session has run the code
+end-to-end. `--host codex` is rejected as an unknown host. Treat it as in-progress
+work, not a host you can adopt today.
+
+## Install on OpenCode
 
 ```sh
 npx opencode-token-norm
@@ -156,7 +181,7 @@ into `AGENTS.md`, in context for the whole session, and then 184 tool calls and
 ## How it works
 
 ```text
-                   OpenCode
+              OpenCode adapter
                       │
           ┌───────────┴────────────┐
           │                        │
@@ -174,6 +199,12 @@ into `AGENTS.md`, in context for the whole session, and then 184 tool calls and
                       │
              the agent reads it in-band
 ```
+
+*That diagram is the OpenCode adapter, so the event names are OpenCode's. The
+counting, the thresholds, the audit and the reminder text sit behind the adapter
+and are the same on every host; the Claude Code hooks adapter subscribes to the
+equivalent events under different names. What a host can measure differs — see
+[host support](#host-support).*
 
 - **Task boundary detection.** Past `BOUNDARY_AT` calls (default 40), a new user
   message revokes any stale "do everything" override, and the next tool call
@@ -209,7 +240,7 @@ thresholds.
 [weighted vs. raw](https://github.com/salitaba/opencode-token-norm/blob/main/docs/how-it-works.md#weighted-vs-raw-calls)
 
 **Process-local by design.** Counters live in memory, not on disk: restarting
-OpenCode resets runtime enforcement state, and the guardrails then undercount
+the host resets runtime enforcement state, and the guardrails then undercount
 rather than re-firing on spend already made. The limits are not durable session
 policy.
 [why](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#session-state-and-process-boundaries)

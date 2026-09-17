@@ -1,5 +1,22 @@
 # Install
 
+Token Norm is one enforcement core behind a per-host adapter, so installing means
+picking a host and installing the adapter for it. `--host` selects one; it
+defaults to `opencode`.
+
+| Host | Command | Status |
+|---|---|---|
+| OpenCode | `npx opencode-token-norm` | verified |
+| Claude Code | `npx opencode-token-norm install --host claude` | verified |
+| Codex | — | no installer yet |
+
+`--host codex` is rejected as an unknown host. The Codex adapter exists and is
+unit-tested, but it has no installer and no published bundle, and no live Codex
+session has run it. [Host support](../README.md#host-support) has the full matrix,
+including which measurement axes each host can actually report.
+
+## OpenCode
+
 ```sh
 npx opencode-token-norm
 ```
@@ -29,22 +46,46 @@ OpenCode builds ≥ 1.17 can silently never initialize npm-spec plugins
 ([#48379](https://github.com/anomalyco/opencode/issues/48379)); once that is
 fixed, `opencode plugin opencode-token-norm --global` is equivalent.
 
+## Claude Code
+
+```sh
+npx opencode-token-norm install --host claude
+npx opencode-token-norm doctor  --host claude
+```
+
+The norm runs as hooks rather than as a plugin: a self-contained build is copied
+to `~/.claude/token-norm/hook.mjs` and registered for seven events in
+`~/.claude/settings.json`. That file is shared with other tools, so the merge is
+additive and identified by the installed hook path, and `uninstall --host claude`
+removes only what it added. No restart is needed — Claude Code picks the hooks up,
+including in sessions that are already running.
+
+Two axes behave differently here, and the full explanation is in the
+[README](../README.md#install-on-claude-code): the cost axis is inert because a
+transcript records token counts but no prices, and the context axis stays disabled
+until you set `TOKEN_NORM_CONTEXT_LIMIT`. `doctor` reports both as warnings, since
+a missing axis at runtime looks exactly like an axis that is fine.
+
+The handoff is also two steps on this host rather than one, because no host API can
+start a Claude Code session: the agent writes the note and you run `/clear`.
+
 ## Requirements
 
-Requires Node ≥ 22 and an OpenCode build with plugin support.
+Requires Node ≥ 22 on every host.
 
 | Component | Supported |
 |---|---|
 | OpenCode | V1 plugin API (`@opencode-ai/plugin` 1.x). Built against 1.18.x, requires ≥ 1.15.12. The V2 plugin API is not targeted yet |
+| Claude Code | verified against 2.1.274; needs a build with hook support |
 | Node | ≥ 22 (CI tests 22, 24) |
-| Python | 3.x, optional — audit checkpoint only |
+| Python | 3.x, optional — OpenCode audit checkpoint only. On Claude Code the audit is computed from the transcript in-process, so `python3` is not needed there |
 | OS | Linux, macOS, Windows (CI) |
 
 `python3` is only used for the audit checkpoint; without it nothing breaks — the
 reminder still fires and tells the agent to run the audit itself.
 
 Per-build verification results live in [compatibility.md](compatibility.md). The
-unit suite mocks the OpenCode runtime, so that table is the real-world evidence
+unit suite mocks the host runtimes, so that table is the real-world evidence
 behind these claims.
 
 ## Check it loaded

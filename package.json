@@ -1,7 +1,7 @@
 {
   "name": "opencode-token-norm",
   "version": "0.11.0",
-  "description": "OpenCode plugin for token-budget guardrails: counts budgeted tool calls, injects reminders at thresholds, audits usage automatically, and makes session handoff a single tool call",
+  "description": "Runtime token-budget guardrails for coding agents: counts budgeted tool calls, injects reminders at thresholds, audits usage automatically, and makes session handoff a single tool call. Runs on OpenCode and Claude Code",
   "type": "module",
   "license": "MIT",
   "author": "salitaba",
@@ -16,6 +16,9 @@
   "keywords": [
     "opencode",
     "opencode-plugin",
+    "claude-code",
+    "claude-code-hooks",
+    "agent",
     "tokens",
     "cost",
     "context",

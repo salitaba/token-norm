@@ -10,6 +10,23 @@ are opt-in and measured: set one and the plugin staples a status block onto
 tool output the first time each metric crosses it. **Operational** options are
 paths, path-adjacent tunings, and kill switches you will probably never touch.
 
+**The variable names are host-neutral; their reach is not.** Every setting below
+is read the same way on every host, but a host that cannot measure a thing cannot
+enforce a budget on it, and the difference is stated rather than silently applied:
+
+| Setting | OpenCode | Claude Code |
+|---|---|---|
+| `TOKEN_NORM_MAX_COST` | enforced | **inert** — a transcript carries no prices |
+| `TOKEN_NORM_CONTEXT_LIMIT` | optional override | **required to enable the context axis** — no transcript field gives a window size |
+| `TOKEN_NORM_MAX_EFFECTIVE_TOKENS` | enforced | enforced |
+| `TOKEN_NORM_MAX_TOOL_CALLS` | enforced | enforced |
+| Thresholds, `TOKEN_NORM_MODE` | enforced | enforced |
+
+`doctor` reports an inert axis as a warning rather than a zero, because a zero on
+screen is indistinguishable from a budget that is comfortably met. Codex is not
+installable yet, so it has no column — see
+[host support](../README.md#host-support).
+
 ### Guardrails (behavioral thresholds)
 
 | Variable | Default | Meaning |
@@ -23,13 +40,13 @@ paths, path-adjacent tunings, and kill switches you will probably never touch.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TOKEN_NORM_MAX_COST` | unset | USD budget from provider cost |
+| `TOKEN_NORM_MAX_COST` | unset | USD budget from provider cost. Inert on Claude Code, which cannot price a transcript |
 | `TOKEN_NORM_MAX_EFFECTIVE_TOKENS` | unset | Fresh-token budget (input + 0.1×cache read + 1.25×cache write) |
 | `TOKEN_NORM_MAX_TOOL_CALLS` | unset | Weighted tool calls; cheap tools excluded |
 | `TOKEN_NORM_TOOL_WEIGHTS` | unset | `name=weight` list overriding the weight of individual tools |
 | `TOKEN_NORM_PHASE_WEIGHTS` | unset | `name=weight` list by assistant mode (`plan`, `build`, ...) |
 | `TOKEN_NORM_CONTEXT_WARN` | `0.8` | Fraction of the context window that counts as pressure |
-| `TOKEN_NORM_CONTEXT_LIMIT` | model limit | Override the window size in tokens (bypasses the cached model lookup) |
+| `TOKEN_NORM_CONTEXT_LIMIT` | model limit | Override the window size in tokens (bypasses the cached model lookup). On Claude Code this is the *only* way to enable the context axis |
 
 Only `TOKEN_NORM_MAX_TOOL_CALLS` is weighted: raw call counts still drive the
 announce, audit, and task-boundary thresholds and the policy's call-count axis,
@@ -63,6 +80,12 @@ cached for the life of the opencode process. Restart after changing provider
 settings, or set `TOKEN_NORM_CONTEXT_LIMIT`, which bypasses the cache.
 
 Every `~/.local/share` above follows `XDG_DATA_HOME` when it is set.
+
+**The `opencode` in those two default paths is a wart, and it is deliberate.** The
+paths are host-independent — the Claude Code host writes its handoff notes to the
+same directory and reads the same log — and the name is left in place rather than
+moved, because moving it would orphan every note already on disk. Override with
+`TOKEN_NORM_HANDOFF_DIR` and `TOKEN_NORM_LOG` if you want them elsewhere.
 
 The cheap set defaults to `todowrite`, `question`, and `skill`: planning and
 asking should never burn the budget, since both usually *save* calls. Reads and
