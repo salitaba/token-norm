@@ -63,70 +63,13 @@ export function transcriptPath(opts: { sessionId: string; cwd?: string; projects
   return path.join(root, projectSlug(cwd), safeSessionId(opts.sessionId) + ".jsonl")
 }
 
-/** How the numbers were obtained. `counted` is the degraded mode the caller
- * falls back to call-counting on: the file was readable but yielded no usable
- * usage, so only the number of assistant turns is known. */
-export type TranscriptSource = "measured" | "counted" | "missing" | "unreadable"
+import { addTokens, isRecord, num, str, type TranscriptRead, type TranscriptSource, type TranscriptTurn } from "./transcript.js"
 
-export interface TranscriptTurn {
-  /** The dedup key actually used: `message.id`, else `requestId`, else the
-   * line's `uuid`, else its line number. */
-  key: string
-  sessionId?: string
-  requestId?: string
-  timestamp?: string
-  /** Subagent (Task) turns. Recorded rather than filtered: attribution is the
-   * caller's policy decision, not the reader's. */
-  sidechain: boolean
-  tokens: RawTokens
-  /** False when the turn existed but carried no readable number -- the shape
-   * changed under us. Such a turn still counts toward call-counting. */
-  measured: boolean
-}
-
-export interface TranscriptRead {
-  source: TranscriptSource
-  path: string
-  /** Deduped assistant turns in file order. `turns.length` IS the call count to
-   * fall back on. */
-  turns: TranscriptTurn[]
-  measuredTurns: number
-  /** Sum over measured turns. */
-  tokens: RawTokens
-  /** The last measured turn on its own. Cumulative `tokens` answers "what has
-   * this session spent"; `latest` answers "how full is the window now", and the
-   * two must not be confused -- cache_read alone is re-counted every turn. */
-  latest?: RawTokens
-  lines: number
-  /** Lines that did not parse. A truncated tail shows up here as 1. */
-  skipped: number
-  /** True when the file exceeded `maxBytes` and only its tail was read. */
-  partial: boolean
-  reason?: string
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-/** Rejects NaN, Infinity, negatives and anything non-numeric. A transcript that
- * starts reporting strings should read as "unmeasured", not as NaN poisoning
- * every downstream sum. */
-function num(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined
-}
-
-export function addTokens(a: RawTokens, b: RawTokens): RawTokens {
-  const out: RawTokens = {
-    input: (a.input ?? 0) + (b.input ?? 0),
-    output: (a.output ?? 0) + (b.output ?? 0),
-    reasoning: (a.reasoning ?? 0) + (b.reasoning ?? 0),
-  }
-  const read = (a.cache?.read ?? 0) + (b.cache?.read ?? 0)
-  const write = (a.cache?.write ?? 0) + (b.cache?.write ?? 0)
-  if (read || write || a.cache || b.cache) out.cache = { read, write }
-  return out
-}
+// The contract moved to ./transcript.ts so usage/codex.ts can implement the same
+// shape without importing from this Claude-specific module. Re-exported because
+// every existing caller imports these names from here.
+export { addTokens }
+export type { TranscriptRead, TranscriptSource, TranscriptTurn }
 
 /** Maps the host's usage object onto RawTokens. Field names are pinned in
  * docs/multi-host-port.md §3 and verified against real files. */
@@ -156,9 +99,6 @@ function tokensOf(usage: Record<string, unknown>): { tokens: RawTokens; measured
   return { tokens, measured }
 }
 
-function str(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined
-}
 
 /** Reads the whole file, or its last `maxBytes` if it is bigger. The cap is not
  * about speed: a multi-hundred-megabyte transcript read into a short-lived hook

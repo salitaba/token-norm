@@ -574,8 +574,8 @@ a copy of the Claude one:
 
 ### 9b. The order
 
-    10. src/usage/codex.ts       rollout JSONL reader, same contract as claude.ts
-    11. src/hosts/codex/         protocol + measure + adapter + main, 4 files
+    10. src/usage/codex.ts       DONE  rollout JSONL reader, same contract as claude.ts
+    11. src/hosts/codex/         NEXT  protocol + measure + adapter + main, 4 files
     12. SessionStart injection   reuse core/handoff-notes.ts, Codex closing text
     13. installer --host codex   hooks.json, additive, append-only, re-trust note
     14. usage-audit.py --host    JSONL reader beside the sqlite one
