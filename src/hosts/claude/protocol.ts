@@ -28,6 +28,7 @@ export type ClaudeHookEvent =
   | "UserPromptSubmit"
   | "Stop"
   | "SessionEnd"
+  | "SessionStart"
 
 /** stdin. Every field is optional: this is another program's JSON, and a hook
  * that throws on a missing key fails the tool call it was supposed to observe. */
@@ -39,6 +40,12 @@ export interface HookInput {
   tool_name?: string
   tool_input?: unknown
   tool_response?: unknown
+  /** SessionStart only. The host's own schema for this event declares
+   * `source: ["startup","resume","clear","compact","fork"]` (read out of Claude
+   * Code 2.1.274, not from docs). It is the difference between a session that
+   * needs the handoff note injected and one that already holds the context the
+   * note summarises -- see `resumesContext`. */
+  source?: string
 }
 
 export type PermissionDecision = "allow" | "deny" | "ask"
@@ -86,6 +93,7 @@ export function parseHookInput(raw: string): HookInput | undefined {
     tool_name: str(parsed.tool_name),
     tool_input: parsed.tool_input,
     tool_response: parsed.tool_response,
+    source: str(parsed.source),
   }
 }
 
@@ -96,6 +104,7 @@ const EVENTS: ReadonlySet<string> = new Set<ClaudeHookEvent>([
   "UserPromptSubmit",
   "Stop",
   "SessionEnd",
+  "SessionStart",
 ])
 
 export function hookEventOf(input: HookInput | undefined): ClaudeHookEvent | undefined {
@@ -118,4 +127,19 @@ export function denyToolCall(reason: string): HookOutput {
       permissionDecisionReason: reason,
     },
   }
+}
+
+/** Does this SessionStart already carry the previous context?
+ *
+ * `resume` and `fork` continue a transcript; `compact` replaces it with a
+ * summary of itself. In all three the model can already see the work the
+ * handoff note describes, so injecting the note duplicates it -- and on
+ * `compact` it re-injects precisely what compaction was run to discard.
+ * Only `startup` and `clear` begin with an empty window.
+ *
+ * An unknown source is treated as resuming, so a source this adapter has not
+ * seen fails closed (no injection) rather than injecting into a live session.
+ */
+export function resumesContext(source: string | undefined): boolean {
+  return source !== "startup" && source !== "clear"
 }

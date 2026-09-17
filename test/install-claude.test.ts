@@ -10,7 +10,18 @@ const script = fileURLToPath(new URL("../scripts/install-local.mjs", import.meta
 const repoRoot = fileURLToPath(new URL("..", import.meta.url))
 const packagedBundle = path.join(repoRoot, "dist", "claude-hook.mjs")
 
-const EVENTS = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit", "Stop", "SessionEnd"]
+// Every event the Claude adapter answers to. SessionStart is the odd one out:
+// it has no opencode counterpart, because it exists to recover the handoff step
+// that opencode does with a tool call and this host cannot do at all.
+const EVENTS = [
+  "PreToolUse",
+  "PostToolUse",
+  "PostToolUseFailure",
+  "UserPromptSubmit",
+  "Stop",
+  "SessionEnd",
+  "SessionStart",
+]
 const TOOL_EVENTS = ["PreToolUse", "PostToolUse", "PostToolUseFailure"]
 
 const tempRoots: string[] = []

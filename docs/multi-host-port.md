@@ -126,7 +126,8 @@ This must be stated plainly in the README rather than papered over.
     5. src/usage/claude.ts  DONE  transcript JSONL reader, degrades to counting
     6. src/hosts/claude/    DONE  PreToolUse deny + PostToolUse inject
     7. installer --host claude   DONE  merges into ~/.claude/settings.json hooks
-    8. live smoke test
+    8. live smoke test           DONE  installed here, see 8f
+    9. SessionStart injection    DONE  recovers the handoff step, see 8g
 
 Steps 1-4 changed no behaviour: 174 tests green before and after, and OpenCode
 still runs on the in-memory backend it always used. Do not start step 5 in the
@@ -432,13 +433,86 @@ file`); never pipe it through `echo`.
 
 **Left for normal use, not verifiable from inside one session:**
 
-- The announcement landing in a *real* session's context. The check above
-  exercises the same installed bytes at the same threshold, but a session cannot
-  cheaply drive itself to 25 calls without 17 filler calls, which is precisely
-  the spend the norm exists to prevent. The first real session that crosses 25
-  settles it; if the text appears as a reminder in context rather than only as a
-  one-line notice to the human, `additionalContext` is confirmed end to end.
+- ~~The announcement landing in a *real* session's context.~~ **Settled during
+  step 9**: the session doing that work crossed 25 of its own tool calls and the
+  reminder arrived in its context, through the installed hook, as
+  `additionalContext` -- not as a notice to the human. The delivery field is now
+  confirmed end to end on a real session and not only by direct invocation.
 - SessionEnd on a real session (the test used a throwaway id): after closing a
   session, its `<uuid>.json` should disappear from
   `~/.local/state/token-norm/claude/`.
 - Stop on a real session: the observable is that the turn simply ends.
+
+### 8g. SessionStart injection, and the handoff that had no tool (step 9)
+
+Step 8 left the README unwritten because documenting the Claude install means
+documenting the handoff degradation, and 8e argued that belongs with the fix
+rather than stapled to an installer change. Writing it turned up that the
+degradation was worse than "one step becomes two".
+
+**The shipped adapter told the model to call a tool that does not exist.**
+`reminders.ts` closes the handoff skeleton with `3. Call the handoff tool once
+the user agrees`, and the handoff tool is opencode-only -- `adapter.ts` says so
+in a comment three screens away. So on this host a session that reached
+HANDOFF_RECOMMENDED was instructed, at the exact moment it was already over
+budget, to spend a turn on a call that could only fail. `handoffLines` now takes
+an optional `closing`, the opencode default is unchanged, and the Claude adapter
+passes the two steps a user can actually perform. A test asserts the default
+still says "call the handoff tool" and that a replaced closing does not.
+
+**The host's SessionStart contract, read out of the binary rather than guessed.**
+Claude Code 2.1.274's own zod schemas give both directions:
+
+    output  hookEventName: "SessionStart", additionalContext?, initialUserMessage?,
+            sessionTitle?, watchPaths?, reloadSkills?
+    input   source: ["startup","resume","clear","compact","fork"], agent_type?,
+            model?, session_title?, seconds_since_last_response?, context_tokens?
+
+`additionalContext` carries the note. `initialUserMessage` is deliberately NOT
+used: it would fabricate a user turn, and the handoff is the previous session
+talking, not the user.
+
+**`source` is the whole design.** Only `startup` and `clear` begin with an empty
+window. `resume` and `fork` continue a transcript and `compact` replaces one
+with a summary of itself -- injecting there duplicates context the model already
+has, and on `compact` it re-injects precisely what compaction ran to discard. An
+unrecognised source is treated as resuming, so a future source fails closed.
+
+**Two rules the note itself needs, for the same reason SessionEnd deletes state:**
+
+- **Consume once.** A note is renamed to `handoff.injected.md` as it is
+  delivered, and marked *before* it is returned: if the rename fails the note is
+  not injected at all. The choice is between a note that arrives once-or-never
+  and one that arrives at the start of every future session in that project; the
+  first is recoverable by hand, the second is not. Renamed rather than deleted,
+  because the note is the agent's own writing and the fixed filename means a
+  later consume overwrites the previous one instead of growing a pile.
+- **Scope by directory, not by content.** The note lives at
+  `HANDOFF_DIR/notes/<slug(cwd)>/handoff.md`, so a note can only reach a session
+  whose cwd produces the same slug. A fixed filename is also what makes the path
+  nameable in a reminder -- the agent has to be able to write it without
+  inventing a timestamp, and the reader has to find it without globbing and
+  choosing between candidates.
+
+**What this gives up.** opencode's own notes are written flat in `HANDOFF_DIR`
+with a prose trailer (`_from session X in DIR_`) and no project subdirectory, so
+they are never injected into a Claude session. Cross-host pickup was considered
+and dropped: the alternative was regex-parsing that trailer for a directory, and
+a wrong parse means a note from one repo injected into another. `HANDOFF_DIR`
+still has `opencode` in its path while the core is host-neutral; that wart is
+left alone rather than moved, because moving it would orphan every note already
+on disk.
+
+Verified live, through the installed bundle at `~/.claude/token-norm/hook.mjs`:
+`source=clear` injected the note in `additionalContext`; `resume` and `compact`
+injected nothing and left the note in place; and a following `startup` injected
+nothing **because the `clear` had already consumed it** -- consume-once
+demonstrating itself rather than an exclusion. `npm test` 249 passed (was 236)
+from a removed `dist/`, and the installer now registers seven events, the new
+one landing in place beside the six already there.
+
+**Still not verified, and it needs one human action:** a real `/clear` in a real
+session. The above drives the installed hook as a process with a synthetic
+`source`; only the host itself can prove it sends `source: "clear"` on a
+`/clear` and renders what comes back. A note written by this session is in place
+for exactly that test.

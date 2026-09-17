@@ -56,7 +56,12 @@ Compaction is itself evidence the session ran too long for one task.
 - Propose finishing here with a 3-line handoff and starting the next task fresh.`
 }
 
-export function handoffLines(sessionID: string): string[] {
+/** `closing` replaces the final instruction. On opencode the handoff is one
+ * tool call; on a host that cannot start a session it is "write the note, then
+ * clear", and telling the agent to call a tool that does not exist there would
+ * spend a turn on a hallucinated call at exactly the moment the session is
+ * already over budget. */
+export function handoffLines(sessionID: string, closing?: string[]): string[] {
   const attr = attribution(usage.get(sessionID))
   const files = usage.editedFiles(sessionID)
   const lines = [
@@ -64,7 +69,7 @@ export function handoffLines(sessionID: string): string[] {
     `Do not start new work in this session. In your next message:`,
     `  1. Report the evidence below and propose finishing here.`,
     `  2. Fill the skeleton with real paths/identifiers; done/next must be yours, not invented.`,
-    `  3. Call the handoff tool once the user agrees.`,
+    ...(closing ?? [`  3. Call the handoff tool once the user agrees.`]),
     ``,
     `Attribution (estimated from output bytes, not tokens):`,
   ]

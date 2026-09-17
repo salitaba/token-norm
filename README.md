@@ -89,6 +89,45 @@ plugin support. Requirements, verification, and troubleshooting are in the
 The V2 plugin API is not targeted yet. Verified builds, per-release, are in the
 [compatibility notes](https://github.com/salitaba/opencode-token-norm/blob/main/docs/compatibility.md).
 
+## Install on Claude Code
+
+```sh
+npx opencode-token-norm install --host claude
+npx opencode-token-norm doctor  --host claude
+```
+
+The norm runs as hooks rather than as a plugin. The command copies a
+self-contained build to `~/.claude/token-norm/hook.mjs` and registers it for
+seven events in `~/.claude/settings.json`. That file is yours and other tools
+write to it, so the merge is additive: entries are identified by the installed
+hook path, an install that finds its own entry rewrites it in place rather than
+duplicating it, `uninstall --host claude` removes only what it added, and a
+`settings.json` that does not parse is refused rather than rewritten. Use
+`--dry-run` on either write path to see the plan first.
+
+Verified against Claude Code 2.1.274, which picks the hooks up without a
+restart — including in sessions that are already running.
+
+**Two axes are off on this host, and say so rather than reporting zero.** A
+Claude transcript records token counts but no prices, so the cost axis is
+inert and `TOKEN_NORM_MAX_COST` does nothing. Nothing in the transcript gives a
+context window size either, so the context axis stays disabled until you set
+`TOKEN_NORM_CONTEXT_LIMIT` — this project does not guess a limit, because a
+guessed one is indistinguishable from a measured one once it is on screen.
+`doctor` reports both as warnings, since a missing axis at runtime looks exactly
+like an axis that is fine.
+
+**The handoff is two steps here, not one.** On OpenCode the `handoff` tool
+writes the note and opens the new session with the note as its first prompt. No
+host API can start a Claude Code session, and a hook certainly cannot, so the
+split becomes: the agent writes the note to
+`~/.local/share/opencode/handoff/notes/<project>/handoff.md` — the path is named
+in the reminder — and you run `/clear`. The new session's `SessionStart` hook
+injects that note and marks it consumed, so it arrives exactly once, only in the
+project it was written for, and only into a session that started empty
+(`clear` or `startup`; a `resume`, `fork` or `compact` already holds the context
+the note describes).
+
 ## Why add Token Norm?
 
 | Capability | Statusline / dashboard | Token rule in `AGENTS.md` | token-norm |

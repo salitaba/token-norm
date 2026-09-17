@@ -13,6 +13,7 @@
 //   message.updated (user)       -> UserPromptSubmit     (arm task boundary)
 //   session.idle / todo.updated  -> Stop                 (arm handoff pause)
 //   session.deleted              -> SessionEnd           (drop the record)
+//   (no opencode counterpart)    -> SessionStart         (inject the handoff note)
 //
 // Every handler returns `undefined` when it has nothing to say, and the runner
 // prints nothing at all in that case. A hook that cannot decide must not be a
@@ -43,6 +44,7 @@ import {
   boundaryReminder,
   handoffLines,
 } from "../../core/budget/reminders.js"
+import { consumeHandoffNote, notePathFor, readHandoffNote } from "../../core/handoff-notes.js"
 import { emptySessionState, state, topTools, track, type SessionState } from "../../core/budget/state.js"
 import { log } from "../../core/log.js"
 import { readTranscript, type TranscriptRead } from "../../usage/claude.js"
@@ -51,6 +53,7 @@ import {
   denyToolCall,
   hookEventOf,
   injectContext,
+  resumesContext,
   type ClaudeHookEvent,
   type HookInput,
   type HookOutput,
@@ -157,7 +160,7 @@ function onPostToolUse(
 
     if (verdict.state === "HANDOFF_RECOMMENDED") {
       log(`${sessionId} handoff recommended at ${s.calls} calls (${verdict.driver.detail})`)
-      sections.handoff = handoffLines(sessionId)
+      sections.handoff = handoffLines(sessionId, handoffClosing(input.cwd))
     }
 
     const lines = renderPolicy(verdict, s.calls, sections)
@@ -237,6 +240,61 @@ function onStop(sessionId: string): HookOutput | undefined {
   return undefined
 }
 
+/** The opencode skeleton ends with "call the handoff tool". That tool cannot
+ * exist here -- it opens the new session itself, and no hook can start one --
+ * so on this host the instruction has to name the two steps the user drives
+ * instead. Left unchanged it would send an over-budget session to spend a turn
+ * calling a tool that is not there, which is the worst moment to do it. */
+function handoffClosing(cwd: string | undefined): string[] {
+  if (!cwd) {
+    return [`  3. Write the 3-line handoff into a NOTES file, then start a fresh session.`]
+  }
+  return [
+    `  3. Write the handoff to ${notePathFor(cwd)} (create the directory), then run /clear.`,
+    `     This host cannot open a session from a hook, so SessionStart injects that note`,
+    `     into the next session instead -- the split costs one write and one /clear.`,
+  ]
+}
+
+/** SessionStart: hand the fresh session the note the previous one left.
+ *
+ * The other half of the degraded split. Only `startup` and `clear` are injected
+ * into: `resume`, `fork` and `compact` already hold the context the note
+ * describes, and on `compact` the note would re-inject exactly what compaction
+ * ran to discard (see `resumesContext`).
+ *
+ * Injection is scoped to the session's own cwd, so a note is never read into a
+ * different repo, and a session with no cwd gets nothing rather than getting
+ * somebody else's note. */
+function onSessionStart(input: HookInput, sessionId: string): HookOutput | undefined {
+  if (resumesContext(input.source)) return undefined
+  const cwd = input.cwd
+  if (!cwd) return undefined
+  const found = readHandoffNote(cwd)
+  if (!found) return undefined
+  // Marked before it is delivered, not after. If the rename fails, the choice
+  // is between delivering this note once-or-never and delivering it at the
+  // start of every future session in this project; a note that never arrives is
+  // still on disk and recoverable by hand, one that arrives forever is not.
+  if (!consumeHandoffNote(found.path)) {
+    log(`${sessionId} handoff note ${found.path} could not be consumed; not injecting`)
+    return undefined
+  }
+  log(`${sessionId} injected handoff note from ${found.path} (source=${input.source})`)
+  return injectContext(
+    "SessionStart",
+    note([
+      `TOKEN NORM -- HANDOFF FROM THE PREVIOUS SESSION.`,
+      `The previous session hit budget pressure and wrote this note for you. It is`,
+      `the task: nothing else from that session carried over. Start from it rather`,
+      `than re-deriving what it already found.`,
+      `The note has been consumed and will not be injected again.`,
+      ``,
+      found.body,
+    ]).trimStart(),
+  )
+}
+
 /** SessionEnd: drop the record.
  *
  * On opencode the counters are in memory and die with the process. Here they
@@ -278,5 +336,7 @@ export function handleHook(input: HookInput | undefined, deps: AdapterDeps = {})
       return onStop(sessionId)
     case "SessionEnd":
       return onSessionEnd(sessionId)
+    case "SessionStart":
+      return onSessionStart(input, sessionId)
   }
 }

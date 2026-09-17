@@ -69,6 +69,7 @@ const CLAUDE_EVENTS = [
   ["UserPromptSubmit", null],
   ["Stop", null],
   ["SessionEnd", null],
+  ["SessionStart", null],
 ]
 
 // The hook is one short-lived node process per event. The timeout is a
