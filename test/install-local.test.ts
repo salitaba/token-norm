@@ -125,7 +125,7 @@ describe("install-local doctor", () => {
     const { out, code } = run(["doctor"], { TOKEN_NORM_MODE: "nonsense", TOKEN_NORM_NOT_A_SETTING: "1" })
     expect(code).toBe(0)
     expect(out).toContain('TOKEN_NORM_MODE="nonsense"')
-    expect(out).toContain("using warn")
+    expect(out).toContain("using handoff")
     expect(out).toContain("unknown setting")
   })
 

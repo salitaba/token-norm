@@ -204,7 +204,7 @@ describe("SessionBudgetPlugin tier 1 budgets", () => {
     process.env.TOKEN_NORM_MAX_COST = "0.50"
     process.env.TOKEN_NORM_MAX_TOOL_CALLS = "0"
     const cfg = await import("../src/core/config.js")
-    expect(cfg.MODE).toBe("warn")
+    expect(cfg.MODE).toBe("handoff")
     expect(cfg.CONTEXT_WARN).toBe(0.5)
     expect(cfg.MAX_COST).toBe(0.5)
     expect(cfg.MAX_TOOL_CALLS).toBeUndefined()

@@ -27,6 +27,7 @@ import {
   BOUNDARY_AT,
   BUDGET_ENABLED,
   CHEAP_TOOLS,
+  HANDOFF_ENABLED,
   MODE,
 } from "../../core/config.js"
 import { blockMessage, budgetSection, takeCrossings } from "../../core/budget/evaluator.js"
@@ -231,7 +232,7 @@ function onUserPromptSubmit(sessionId: string): HookOutput | undefined {
  * the very session it is asking to end. The flag is read on the next tool
  * call, which is where opencode surfaces it too. */
 function onStop(sessionId: string): HookOutput | undefined {
-  if (MODE !== "handoff") return undefined
+  if (!HANDOFF_ENABLED || MODE !== "handoff") return undefined
   const s = state.get(sessionId)
   if (!s || s.pendingHandoff) return undefined
   s.pendingHandoff = true
@@ -267,6 +268,11 @@ function handoffClosing(cwd: string | undefined): string[] {
  * different repo, and a session with no cwd gets nothing rather than getting
  * somebody else's note. */
 function onSessionStart(input: HookInput, sessionId: string): HookOutput | undefined {
+  // The kill switch, unlike MODE, is checked on both halves: a note written
+  // while the mode was `handoff` should still arrive after the mode changes,
+  // but TOKEN_NORM_HANDOFF=0 means "stop touching my sessions" and delivery
+  // is the half the user actually sees.
+  if (!HANDOFF_ENABLED) return undefined
   if (resumesContext(input.source)) return undefined
   const cwd = input.cwd
   if (!cwd) return undefined

@@ -46,13 +46,13 @@ Without Token Norm          With Token Norm
 
 ## Enforcement modes
 
-An adoption ladder, not a switch. `TOKEN_NORM_MODE`, default `warn`:
+An adoption ladder, not a switch. `TOKEN_NORM_MODE`, default `handoff`:
 
 | Mode | What it does |
 |---|---|
 | `observe` | Measures and logs. Injects nothing. |
-| `warn` | Injects the checkpoint into tool output. **Default.** |
-| `handoff` | Adds a session-split recommendation, but only at a pause. |
+| `warn` | Injects the checkpoint into tool output. |
+| `handoff` | Adds a session-split recommendation, but only at a pause. **Default.** |
 | `block` | Refuses non-cheap tool calls past a hard limit. Opt-in. |
 
 Only `block` can fail a tool call, and only on a limit you set — pressure alone

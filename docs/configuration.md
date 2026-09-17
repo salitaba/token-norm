@@ -17,7 +17,7 @@ paths, path-adjacent tunings, and kill switches you will probably never touch.
 | `TOKEN_NORM_ANNOUNCE_AT` | `25` | Calls before the cost-statement reminder |
 | `TOKEN_NORM_AUDIT_EVERY` | `60` | Calls between audit checkpoints |
 | `TOKEN_NORM_BOUNDARY_AT` | `40` | Session size above which a new user message is a task boundary |
-| `TOKEN_NORM_MODE` | `warn` | `observe` logs only; `warn` injects; `handoff` adds a skeleton at a pause; `block` refuses non-cheap tools |
+| `TOKEN_NORM_MODE` | `handoff` | `observe` logs only; `warn` injects; `handoff` adds a skeleton at a pause; `block` refuses non-cheap tools |
 
 ### Budgets (opt-in, measured)
 
@@ -83,7 +83,7 @@ a typo used to leave you believing a budget was in force when none was. Every
 rejected value is now reported once at load, to the log and as a toast:
 
 ```
-config: TOKEN_NORM_MODE="blocking" ignored -- expected one of observe, warn, handoff, block; using warn
+config: TOKEN_NORM_MODE="blocking" ignored -- expected one of observe, warn, handoff, block; using handoff
 ```
 
 Reported cases: a non-numeric or non-positive threshold or budget, a

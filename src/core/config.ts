@@ -182,10 +182,11 @@ export const PYTHON = env("TOKEN_NORM_PYTHON") || "python3"
 export const BUDGET_ENABLED = killSwitch("TOKEN_NORM_BUDGET")
 export const HANDOFF_ENABLED = killSwitch("TOKEN_NORM_HANDOFF")
 
-/** How hard the budget bites. `warn` is the default and preserves the
- * plugin's historical behavior. `observe` logs crossings but injects nothing
- * (used to validate the context formula against real compactions). `handoff`
- * adds a skeleton at the next pause. `block` refuses non-cheap tool calls and
+/** How hard the budget bites. `handoff` is the default: it adds a skeleton at
+ * the next pause, so the split the norm asks for is armed rather than
+ * remembered. `warn` preserves the plugin's historical behavior. `observe`
+ * logs crossings but injects nothing (used to validate the context formula
+ * against real compactions). `block` refuses non-cheap tool calls and
  * is opt-in only -- "don't break the user's work" still stands. */
 export type BudgetMode = "observe" | "warn" | "handoff" | "block"
 
@@ -193,10 +194,10 @@ const MODES = ["observe", "warn", "handoff", "block"]
 
 function mode(): BudgetMode {
   const raw = env("TOKEN_NORM_MODE")
-  if (!raw) return "warn"
+  if (!raw) return "handoff"
   if (MODES.includes(raw)) return raw as BudgetMode
-  reject("TOKEN_NORM_MODE", raw, `expected one of ${MODES.join(", ")}`, "warn")
-  return "warn"
+  reject("TOKEN_NORM_MODE", raw, `expected one of ${MODES.join(", ")}`, "handoff")
+  return "handoff"
 }
 
 export const MODE: BudgetMode = mode()

@@ -75,7 +75,7 @@ describe("config diagnostics", () => {
   it("reports an unknown mode and names the accepted values", async () => {
     const [d, ...rest] = await diagnose({ TOKEN_NORM_MODE: "nonsense" })
     expect(rest).toEqual([])
-    expect(d).toMatchObject({ name: "TOKEN_NORM_MODE", raw: "nonsense", using: "warn" })
+    expect(d).toMatchObject({ name: "TOKEN_NORM_MODE", raw: "nonsense", using: "handoff" })
     expect(d.reason).toContain("observe, warn, handoff, block")
   })
 
@@ -176,7 +176,7 @@ describe("logConfigDiagnostics", () => {
     const lines = logConfigDiagnostics()
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('TOKEN_NORM_MODE="nope" ignored')
-    expect(lines[0]).toContain("using warn")
+    expect(lines[0]).toContain("using handoff")
     expect(readFileSync(logPath, "utf8")).toContain(lines[0])
 
     // Drained: a second half of the plugin loading must not re-report.
