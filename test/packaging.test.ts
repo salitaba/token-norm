@@ -15,12 +15,13 @@ const REQUIRED_ENTRIES = [
   "dist/index.d.ts",
   "dist/index.js",
   "dist/plugin.js",
+  "dist/claude-hook.mjs",
   "dist/provenance.json",
   "scripts/install-local.mjs",
   "scripts/usage-audit.py",
 ]
 
-const PROVENANCE_ARTIFACTS = ["dist/plugin.js", "scripts/usage-audit.py"]
+const PROVENANCE_ARTIFACTS = ["dist/plugin.js", "dist/claude-hook.mjs", "scripts/usage-audit.py"]
 
 const ROOT_ENTRIES = new Set(["LICENSE", "README.md", "package.json"])
 
@@ -97,7 +98,7 @@ describe("packaged artifact", () => {
     expect(unexpected).toEqual([])
   })
 
-  // The two hashed files leave npm's integrity story the moment the installer
+  // The three hashed files leave npm's integrity story the moment the installer
   // copies them into ~/.config/opencode. If the recorded digests do not match
   // the bytes actually packed, the published provenance is worse than none.
   it("records the commit and the true sha256 of every artifact it names", () => {

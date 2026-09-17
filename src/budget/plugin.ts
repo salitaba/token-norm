@@ -134,6 +134,12 @@ export const SessionBudgetPlugin: Plugin = async ({ client }: BudgetPluginInput 
           const paused = state.get(pauseID)
           if (paused && !paused.pendingHandoff) {
             paused.pendingHandoff = true
+            // Every mutation below is followed by a save. On MemoryStore that is
+            // a no-op -- the plugin is holding the stored object -- but a hook
+            // adapter on the disk backend persists NOTHING without it, and the
+            // failure is silent: the session counts to zero forever while every
+            // handler looks like it ran. See docs/multi-host-port.md 8a.
+            state.save(pauseID)
             log(`${pauseID} pause observed (handoff armed pending pressure)`)
           }
         }
@@ -175,6 +181,7 @@ export const SessionBudgetPlugin: Plugin = async ({ client }: BudgetPluginInput 
           if (oldest !== undefined) s.seenMessages.delete(oldest)
         }
         s.pendingBoundary = true
+        state.save(info.sessionID)
         log(`${info.sessionID} task-boundary at ${s.calls} calls (msg ${info.id})`)
       } catch {
         /* a missed boundary must never break the session */
@@ -290,6 +297,13 @@ export const SessionBudgetPlugin: Plugin = async ({ client }: BudgetPluginInput 
         }
       } catch {
         /* the policy pass is advisory; never break a tool call */
+      } finally {
+        // In the `finally` rather than after the render, because the catch
+        // above swallows anything the pass throws. The mutations up to that
+        // point (a consumed pause, a latched crossing, a raised level) have
+        // already happened in memory; dropping them on the way out would
+        // re-arm a reminder the session has already spent.
+        state.save(input.sessionID)
       }
     },
 

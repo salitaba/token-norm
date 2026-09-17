@@ -40,7 +40,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "build:plugin": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --legal-comments=none --outfile=dist/plugin.js && npm run build:provenance",
+    "build:plugin": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --legal-comments=none --outfile=dist/plugin.js && npm run build:claude-hook && npm run build:provenance",
+    "build:claude-hook": "esbuild src/hosts/claude/main.ts --bundle --platform=node --format=esm --target=node22 --legal-comments=none --outfile=dist/claude-hook.mjs",
     "build:provenance": "node tools/provenance.mjs",
     "typecheck": "tsc --noEmit",
     "pretest": "npm run build:plugin",

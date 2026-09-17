@@ -2,10 +2,12 @@
 // Writes dist/provenance.json: which commit produced the shipped bytes, and
 // what those bytes hash to.
 //
-// Why this exists: the package ships two files that run on a user's machine
+// Why this exists: the package ships three files that run on a user's machine
 // outside npm's own integrity story -- dist/plugin.js is copied into
-// ~/.config/opencode/plugins by the installer, and scripts/usage-audit.py is
-// copied next to it and later executed. Once copied they are loose files with
+// ~/.config/opencode/plugins by the installer, scripts/usage-audit.py is
+// copied next to it and later executed, and dist/claude-hook.mjs is copied
+// into ~/.claude/token-norm and then named in ~/.claude/settings.json, where
+// Claude Code executes it once per hook event. Once copied they are loose files with
 // no registry tarball behind them, so "is the plugin I am running the one that
 // was released?" had no answer. Hashes recorded at build time, published in the
 // tarball and in the GitHub release notes, give one.
@@ -22,7 +24,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 
 // Paths are relative to the package root so the recorded keys match what a
 // consumer sees after unpacking the tarball.
-const HASHED = ["dist/plugin.js", "scripts/usage-audit.py"]
+const HASHED = ["dist/plugin.js", "dist/claude-hook.mjs", "scripts/usage-audit.py"]
 
 function git(args) {
   try {

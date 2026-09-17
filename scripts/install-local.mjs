@@ -19,7 +19,18 @@
 // and afterwards answer "is the plugin I am running the one this package
 // ships?" -- a question a copied loose file cannot otherwise answer.
 import { execFileSync } from "node:child_process"
-import { accessSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { createHash } from "node:crypto"
 import { homedir } from "node:os"
 import { dirname, join, resolve } from "node:path"
@@ -33,9 +44,63 @@ const opencodeDir = join(configHome, "opencode")
 const pluginTarget = join(opencodeDir, "plugins", "opencode-token-norm.js")
 const auditTarget = join(opencodeDir, "scripts", "usage-audit.py")
 
+// Claude Code's hook commands are absolute paths in a config file, so the file
+// they name has to outlive the install: `npx` unpacks this package into a cache
+// directory that is deleted, which would leave settings.json pointing at
+// nothing. Hence a copy into a stable directory, exactly as the OpenCode side
+// copies dist/plugin.js instead of registering an npm spec.
+//
+// CLAUDE_CONFIG_DIR is honoured when set. Claude Code 2.1.274 is not documented
+// to read it, but the binary is packed and cannot be grepped for the answer, so
+// respecting an explicitly-set value is the option that is wrong in no case.
+const claudeDir = process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude")
+const claudeBundle = join(pkgRoot, "dist", "claude-hook.mjs")
+const claudeHookTarget = join(claudeDir, "token-norm", "hook.mjs")
+const claudeSettings = join(claudeDir, "settings.json")
+
+/** The six events the adapter handles, with the matcher convention this host's
+ * own settings.json already uses: tool events are scoped with "*", session
+ * events carry no matcher. Verified against Claude Code 2.1.274 -- see
+ * docs/multi-host-port.md 8d, which also records why Stop injects nothing. */
+const CLAUDE_EVENTS = [
+  ["PreToolUse", "*"],
+  ["PostToolUse", "*"],
+  ["PostToolUseFailure", "*"],
+  ["UserPromptSubmit", null],
+  ["Stop", null],
+  ["SessionEnd", null],
+]
+
+// The hook is one short-lived node process per event. The timeout is a
+// backstop, not a budget: if it ever does hang, the tool call must not hang
+// with it.
+const CLAUDE_HOOK_TIMEOUT = 10
+
 const argv = process.argv.slice(2)
 const dryRun = argv.includes("--dry-run")
-const command = (argv.find((a) => !a.startsWith("--")) ?? "install").replace(/^--/, "")
+
+/** `--host claude` and `--host=claude` both work, and the value is consumed
+ * before the command is read: the subcommand is "the first bare argument", so
+ * an unconsumed `claude` would otherwise be taken as the command name. */
+function takeHost() {
+  const inline = argv.find((a) => a.startsWith("--host="))
+  if (inline) return { value: inline.slice("--host=".length), consumed: [inline] }
+  const flag = argv.indexOf("--host")
+  if (flag === -1) return { value: null, consumed: [] }
+  return { value: argv[flag + 1] ?? "", consumed: argv.slice(flag, flag + 2) }
+}
+
+const HOSTS = ["opencode", "claude"]
+const hostArg = takeHost()
+const host = hostArg.value ?? "opencode"
+const command = (
+  argv.find((a) => !a.startsWith("--") && !hostArg.consumed.includes(a)) ?? "install"
+).replace(/^--/, "")
+
+if (!HOSTS.includes(host)) {
+  console.error(`unknown host "${host}"\nsupported: ${HOSTS.join(", ")}`)
+  process.exit(1)
+}
 
 function configStillListsPlugin() {
   for (const name of ["opencode.json", "opencode.jsonc"]) {
@@ -70,7 +135,215 @@ function printPlan() {
   console.log("Nothing is added to your shell profile, PATH, or opencode config.")
 }
 
+// --- claude host -------------------------------------------------------------
+//
+// settings.json is a file the user owns and third parties already write to: on
+// the machine this was developed against it carries rtk and orca hooks across
+// ten events. So every function here is additive and identified by our own
+// command string -- nothing else in the file is read for meaning, rewritten, or
+// reordered, and a file that does not parse is refused rather than replaced.
+
+/** True for a hook entry this installer wrote. Keyed on the installed path
+ * rather than the word "token-norm" so a user's unrelated hook that happens to
+ * mention the project is never removed by our uninstall. */
+function isOurHook(entry) {
+  return typeof entry?.command === "string" && entry.command.includes(claudeHookTarget)
+}
+
+function claudeHookEntry() {
+  // Quoted: the path runs through a shell, and a home directory with a space
+  // in it would otherwise split into two arguments.
+  return { type: "command", command: `node ${JSON.stringify(claudeHookTarget)}`, timeout: CLAUDE_HOOK_TIMEOUT }
+}
+
+/** Reads settings.json for writing. Refuses on anything it cannot round-trip:
+ * rewriting a file we did not fully understand is how an installer eats a
+ * config it was only meant to add one line to. */
+function readSettingsForWrite() {
+  if (!existsSync(claudeSettings)) return { settings: {}, existed: false }
+  const raw = readFileSync(claudeSettings, "utf8")
+  if (raw.trim() === "") return { settings: {}, existed: true }
+  let parsed
+  try {
+    parsed = JSON.parse(raw)
+  } catch (err) {
+    console.error(`${claudeSettings} is not valid JSON:`)
+    console.error(`  ${String(err instanceof Error ? err.message : err).slice(0, 120)}`)
+    console.error("refusing to write it. Fix or move the file, then run this again.")
+    process.exit(1)
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    console.error(`${claudeSettings} is not a JSON object -- refusing to write it`)
+    process.exit(1)
+  }
+  return { settings: parsed, existed: true }
+}
+
+function eventGroups(settings, event) {
+  const groups = settings?.hooks?.[event]
+  return Array.isArray(groups) ? groups : null
+}
+
+function eventHasOurHook(settings, event) {
+  const groups = eventGroups(settings, event)
+  if (!groups) return false
+  return groups.some((group) => (Array.isArray(group?.hooks) ? group.hooks : []).some(isOurHook))
+}
+
+/** Adds our hook to every event that lacks it and refreshes the entry where it
+ * is already present (so a moved install path or changed timeout is corrected
+ * rather than duplicated). Returns the events it added, for the report.
+ * Mutates `settings`; callers that only want a preview pass a clone. */
+function registerClaudeHooks(settings) {
+  if (settings.hooks !== undefined && (typeof settings.hooks !== "object" || settings.hooks === null || Array.isArray(settings.hooks))) {
+    console.error(`${claudeSettings} has a "hooks" key that is not an object -- refusing to write it`)
+    process.exit(1)
+  }
+  settings.hooks ??= {}
+  const added = []
+  for (const [event, matcher] of CLAUDE_EVENTS) {
+    const existing = settings.hooks[event]
+    if (existing !== undefined && !Array.isArray(existing)) {
+      console.error(`${claudeSettings} has a "hooks.${event}" that is not an array -- refusing to write it`)
+      process.exit(1)
+    }
+    const groups = (settings.hooks[event] ??= [])
+    let found = false
+    for (const group of groups) {
+      const hooks = Array.isArray(group?.hooks) ? group.hooks : []
+      for (let i = 0; i < hooks.length; i += 1) {
+        if (isOurHook(hooks[i])) {
+          hooks[i] = claudeHookEntry()
+          found = true
+        }
+      }
+    }
+    if (found) continue
+    groups.push(matcher === null ? { hooks: [claudeHookEntry()] } : { matcher, hooks: [claudeHookEntry()] })
+    added.push(event)
+  }
+  return added
+}
+
+/** Removes only our entries, then prunes the containers that our removal left
+ * empty -- an empty matcher group or an empty event array is our litter, not
+ * the user's configuration. */
+function unregisterClaudeHooks(settings) {
+  const removed = []
+  for (const [event] of CLAUDE_EVENTS) {
+    const groups = eventGroups(settings, event)
+    if (!groups) continue
+    let touched = false
+    for (const group of groups) {
+      if (!Array.isArray(group?.hooks)) continue
+      const kept = group.hooks.filter((entry) => !isOurHook(entry))
+      if (kept.length !== group.hooks.length) {
+        group.hooks = kept
+        touched = true
+      }
+    }
+    const surviving = groups.filter((group) => !(Array.isArray(group?.hooks) && group.hooks.length === 0))
+    if (surviving.length !== groups.length) settings.hooks[event] = surviving
+    if (settings.hooks[event].length === 0) delete settings.hooks[event]
+    if (touched) removed.push(event)
+  }
+  if (settings.hooks && Object.keys(settings.hooks).length === 0) delete settings.hooks
+  return removed
+}
+
+function writeSettings(settings) {
+  // Written to a sibling and renamed: a half-written settings.json would take
+  // the host's whole configuration with it, not just our hooks.
+  mkdirSync(dirname(claudeSettings), { recursive: true })
+  const tmp = `${claudeSettings}.token-norm.tmp`
+  writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`)
+  renameSync(tmp, claudeSettings)
+}
+
+function printClaudePlan() {
+  const { settings, existed } = readSettingsForWrite()
+  const added = registerClaudeHooks(structuredClone(settings))
+  console.log("Token Norm install plan (host: claude)\n")
+  console.log(`  hook         ${existsSync(claudeHookTarget) ? "overwrite" : "create"}  ${claudeHookTarget}`)
+  console.log(`  settings     ${existed ? "merge" : "create"}      ${claudeSettings}`)
+  for (const [event] of CLAUDE_EVENTS) {
+    console.log(`    ${added.includes(event) ? "register          " : "already registered"}  ${event}`)
+  }
+  console.log("")
+  console.log("Only hook entries whose command names the path above are added or refreshed.")
+  console.log("Every other hook, matcher, and top-level setting in that file is left alone.")
+}
+
+function installClaude() {
+  if (!existsSync(claudeBundle)) {
+    console.error(`no build found at ${claudeBundle}\nrun \`npm run build:claude-hook\` first, or install from npm`)
+    process.exit(1)
+  }
+  if (dryRun) {
+    printClaudePlan()
+    console.log("\n--dry-run: nothing was written.")
+    return
+  }
+  mkdirSync(dirname(claudeHookTarget), { recursive: true })
+  copyFileSync(claudeBundle, claudeHookTarget)
+
+  const { settings } = readSettingsForWrite()
+  const added = registerClaudeHooks(settings)
+  writeSettings(settings)
+
+  console.log(`installed hook    -> ${claudeHookTarget}`)
+  console.log(
+    added.length > 0
+      ? `registered        -> ${claudeSettings} (${added.join(", ")})`
+      : `already registered in ${claudeSettings}; refreshed the command`,
+  )
+  console.log("")
+  console.log("Restart Claude Code to load it, then check it with:")
+  console.log("  npx opencode-token-norm doctor --host claude")
+  console.log("")
+  // Stated at install time because both are invisible at runtime: a missing
+  // axis looks identical to an axis that is fine.
+  console.log("On this host the cost axis is inert (the transcript records tokens, not prices),")
+  console.log("and the context axis needs TOKEN_NORM_CONTEXT_LIMIT -- nothing in the transcript")
+  console.log("gives a window size, and this project does not guess one.")
+}
+
+function uninstallClaude() {
+  const registered = existsSync(claudeSettings) ? CLAUDE_EVENTS.filter(([e]) => eventHasOurHook(JSON.parse(readFileSync(claudeSettings, "utf8")), e)).map(([e]) => e) : []
+  if (dryRun) {
+    console.log("Token Norm uninstall plan (host: claude)\n")
+    console.log(`  ${existsSync(claudeHookTarget) ? "remove " : "absent "} ${claudeHookTarget}`)
+    console.log(
+      registered.length > 0
+        ? `  unregister  ${claudeSettings} (${registered.join(", ")})`
+        : `  unchanged   ${claudeSettings} (no token-norm hooks)`,
+    )
+    console.log("\n--dry-run: nothing was removed.")
+    return
+  }
+  if (existsSync(claudeHookTarget)) {
+    rmSync(claudeHookTarget)
+    console.log(`removed ${claudeHookTarget}`)
+    const dir = dirname(claudeHookTarget)
+    // Only when our own file was the only thing in it. `recursive` is required
+    // for a directory even when it is empty; the emptiness check above is what
+    // keeps this from removing anything the user put there.
+    if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true })
+  }
+  if (existsSync(claudeSettings)) {
+    const { settings } = readSettingsForWrite()
+    const removed = unregisterClaudeHooks(settings)
+    if (removed.length > 0) {
+      writeSettings(settings)
+      console.log(`unregistered ${removed.join(", ")} in ${claudeSettings}`)
+    } else {
+      console.log(`no token-norm hooks in ${claudeSettings}`)
+    }
+  }
+}
+
 function install() {
+  if (host === "claude") return installClaude()
   if (!existsSync(bundle)) {
     console.error(`no build found at ${bundle}\nrun \`npm run build:plugin\` first, or install from npm`)
     process.exit(1)
@@ -99,6 +372,7 @@ function install() {
 }
 
 function uninstall() {
+  if (host === "claude") return uninstallClaude()
   if (dryRun) {
     console.log("Token Norm uninstall plan\n")
     for (const file of [pluginTarget, auditTarget]) {
@@ -254,20 +528,75 @@ async function checkSettings() {
   }
 }
 
+function checkClaudeBundle() {
+  if (existsSync(claudeBundle)) ok("package bundle", `${readPkgVersion()} at ${claudeBundle}`)
+  else fail("package bundle", `missing ${claudeBundle} -- run \`npm run build:claude-hook\``)
+}
+
+function checkClaudeHook() {
+  if (!existsSync(claudeHookTarget)) {
+    fail("hook installed", `not found at ${claudeHookTarget} -- run \`npx opencode-token-norm --host claude\``)
+    return
+  }
+  if (!existsSync(claudeBundle)) {
+    warn("hook installed", `${claudeHookTarget} (cannot compare: no bundle in this package)`)
+    return
+  }
+  if (sha256(claudeHookTarget) === sha256(claudeBundle)) ok("hook installed", `${claudeHookTarget} (matches this package)`)
+  else warn("hook installed", `${claudeHookTarget} differs from this package -- rerun the installer to update`)
+}
+
+/** Installed-but-unregistered is the failure this check exists for: the hook
+ * file can be perfect and the host will never run it. */
+function checkClaudeRegistration() {
+  if (!existsSync(claudeSettings)) {
+    fail("hook registration", `${claudeSettings} does not exist -- run \`npx opencode-token-norm --host claude\``)
+    return
+  }
+  let settings
+  try {
+    settings = JSON.parse(readFileSync(claudeSettings, "utf8"))
+  } catch (err) {
+    fail("hook registration", `${claudeSettings} is not valid JSON (${String(err instanceof Error ? err.message : err).slice(0, 60)})`)
+    return
+  }
+  const missing = CLAUDE_EVENTS.filter(([event]) => !eventHasOurHook(settings, event)).map(([event]) => event)
+  if (missing.length === 0) ok("hook registration", `all ${CLAUDE_EVENTS.length} events in ${claudeSettings}`)
+  else if (missing.length === CLAUDE_EVENTS.length) fail("hook registration", `no token-norm hooks in ${claudeSettings} -- run the installer`)
+  else warn("hook registration", `not registered for ${missing.join(", ")} -- rerun the installer`)
+}
+
+/** Reports the two axes 8d degraded on purpose, so "no context line in the
+ * reminder" is a documented state here rather than a suspected bug. */
+function checkClaudeAxes() {
+  const limit = process.env.TOKEN_NORM_CONTEXT_LIMIT
+  if (limit) ok("context axis", `TOKEN_NORM_CONTEXT_LIMIT=${limit}`)
+  else warn("context axis", "off -- set TOKEN_NORM_CONTEXT_LIMIT; the transcript records no window size")
+  warn("cost axis", "off on this host -- the transcript records tokens, not prices")
+}
+
 const MARK = { ok: "\u2713", warn: "!", fail: "\u2717" }
 
 async function doctor() {
   checkNode()
-  checkOpencode()
-  checkPackage()
-  checkInstalled()
-  checkAuditScript()
-  await checkSettings()
-  checkPython()
-  checkDatabase()
-  checkDuplicateRegistration()
+  if (host === "claude") {
+    checkClaudeBundle()
+    checkClaudeHook()
+    checkClaudeRegistration()
+    await checkSettings()
+    checkClaudeAxes()
+  } else {
+    checkOpencode()
+    checkPackage()
+    checkInstalled()
+    checkAuditScript()
+    await checkSettings()
+    checkPython()
+    checkDatabase()
+    checkDuplicateRegistration()
+  }
 
-  console.log("Token Norm doctor\n")
+  console.log(`Token Norm doctor${host === "claude" ? " (host: claude)" : ""}\n`)
   for (const r of results) console.log(`  ${MARK[r.level]} ${r.label.padEnd(17)} ${r.detail}`)
 
   const failed = results.filter((r) => r.level === "fail").length
@@ -281,11 +610,15 @@ async function doctor() {
 }
 
 function help() {
-  console.log("usage: opencode-token-norm [install|doctor|uninstall] [--dry-run]\n")
-  console.log("  install    copy the plugin into ~/.config/opencode/plugins (default)")
+  console.log("usage: opencode-token-norm [install|doctor|uninstall] [--host HOST] [--dry-run]\n")
+  console.log("  install    install or update for --host (default)")
   console.log("  doctor     check the install and report what would break")
   console.log("  uninstall  remove it")
   console.log("")
+  console.log(`  --host     ${HOSTS.join(" | ")} (default: opencode)`)
+  console.log("               opencode  copy the plugin into ~/.config/opencode/plugins")
+  console.log("               claude    copy the hook into ~/.claude/token-norm and merge it")
+  console.log("                         into the hooks in ~/.claude/settings.json")
   console.log("  --dry-run  print every path install/uninstall would touch, write nothing")
 }
 
