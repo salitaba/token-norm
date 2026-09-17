@@ -356,6 +356,12 @@ run /clear"), and that belongs with the SessionStart injection that recovers it
 -- not stapled to an installer change. Step 8 (live smoke test in a real
 session) is the next step.
 
+> **Update (2026-09-17): both of those are now done.** The README documents the
+> Claude Code install, states the two-step handoff plainly, and carries a host
+> support matrix that lists Codex as in-progress rather than supported. The
+> paragraph above is kept as written, because it records the reasoning at the
+> time -- it is no longer a description of the current state.
+
 ### 8f. What the live run showed (step 8)
 
 Claude Code 2.1.274 on this host, against the installed bundle at

@@ -1,7 +1,13 @@
 # Rename plan
 
-**Status: proposed, not started.** Nothing in this document has been executed.
-The package, the repo, and the `bin` command all still carry the current name.
+**Status: name decided (`token-norm`), execution not started.** Nothing has been
+executed. The package, the repo, and the `bin` command all still carry the
+current name.
+
+Execution is blocked on two things that cannot be done from a working copy: an
+npm login (`npm whoami` reports not logged in), and the GitHub repository rename.
+Both are outward-facing and irreversible enough that they need a human at the
+keyboard. See *Executing it* at the end of this document.
 
 ## Why
 
@@ -68,23 +74,38 @@ previously-decided exception:
 
 ## Naming
 
-**Not yet decided, and this is the first thing to settle.** Requirements:
-lowercase, hyphenated, no scope if avoidable, and it must not lie about the host.
+**Decided: `token-norm`.** It is the shortest option that still describes what
+the thing is, it says nothing false about the host, and the package name is the
+one string users type — the leading `opencode-` is the whole problem, so replacing
+it with `agent-` only trades one qualifier for another.
 
-| Candidate | Note |
+Availability checked against the registry on **2026-09-17**:
+
+| Candidate | `npm view <name> version` |
 |---|---|
-| `token-norm` | cleanest, but almost certainly taken — must be checked |
-| `agent-token-norm` | descriptive, likely free, slightly long |
-| `@salitaba/token-norm` | scope guarantees availability; costs the short name |
+| `token-norm` | **free** |
+| `agent-token-norm` | free |
+| `token-norm-plugin` | free |
+| `claude-token-norm` | free |
+| `ai-token-norm` | free |
+| `tokennorm` | free |
 
-Check availability before anything else:
+An empty result for every candidate was implausible enough to warrant a control,
+so the same check was run against `react`, `express`, `typescript` and `vitest`,
+which all resolved (`react -> 19.3.0`). `npm ping` returned PONG. The check is
+therefore measuring the registry and not a silent network failure — `npm view`
+returns empty for a missing package *and* for a dead connection, and the two are
+indistinguishable without a control.
 
-```sh
-npm view <candidate> version   # exit 0 means taken
-```
+**A free name is not a guarantee of a successful publish.** npm applies
+name-similarity rules at publish time and can reject a name that merely looks like
+an existing package, which `npm view` will not reveal. `token-norm` sits close to
+several existing `*-norm` packages, so treat publication as a distinct step to be
+confirmed rather than a formality. Fall back to `agent-token-norm` (also free) if
+the publish is rejected.
 
-Nothing else in this plan can be costed until the name is chosen, because the
-`npx` commands in every doc depend on it.
+`@salitaba/token-norm` is the guaranteed-available fallback, since a scope cannot
+collide — but it costs the short name and looks worse in an install command.
 
 ## Ordering
 
@@ -94,7 +115,7 @@ publishes with a repository field pointing at a URL that no longer resolves.
 1. **Publish the new npm package** under the new name, with `repository` and
    `homepage` still pointing at the *current* GitHub URL (correct at this moment).
 2. **Publish a deprecation release of the old package** — same version content,
-   `npm deprecate opencode-token-norm "renamed to <new>; install that instead"`,
+   `npm deprecate opencode-token-norm "renamed to token-norm; install that instead"`,
    and a `bin` alias so `npx opencode-token-norm` keeps working during the window.
    Keeping both `bin` names live is what stops the rename from breaking anyone
    mid-flight.
@@ -131,3 +152,28 @@ the rename was authored on:
 | Docs elsewhere (blog posts, package listings) point at the old name | the npm deprecation notice is the only lever; accept the tail |
 | Renaming a path that holds user data | the *must not rename* list above is exhaustive — cross-check against it before every edit |
 | Half-finished rename | land it as one commit plus one publish; do not split across sessions |
+
+## Executing it
+
+**This cannot be completed from a working copy, and was not attempted.** Two of
+the steps are outward-facing and irreversible, and both need a human:
+
+1. **`npm login`.** `npm whoami` currently reports not logged in, so no publish is
+   possible. The publish is also the step most likely to fail for a non-obvious
+   reason — see the name-similarity caveat above — so it wants a person watching
+   the output, not a script.
+2. **The GitHub repository rename.** Irreversible in the sense that matters:
+   issue and PR numbers, clones, and every inbound link change behaviour at once,
+   and `raw.githubusercontent.com` URLs stop resolving without redirect.
+
+The order in *Ordering* above is load-bearing and should be followed literally.
+Do not start with the repo rename because it is the visible one: doing so breaks
+the README's demo assets and the old package's `repository` field before the
+replacement is published.
+
+Recommended handling: do this as its own session, with the name already settled
+(it is — `token-norm`), and do not mix it with feature work. The mechanical sweep
+is a find-and-replace across 24 files; the part that needs judgment is deciding,
+file by file, which of the 160 occurrences are *the product name* and which are
+*a host name or a user-data path*. That distinction is enumerated under *What
+must NOT be renamed* and is the only real source of risk here.
