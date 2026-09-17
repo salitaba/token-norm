@@ -645,3 +645,77 @@ worth a read-only session that records its findings in a §9g first:
   `doctor`, and never throw.
 - **No programmatic new session** (§6), so the handoff is the same two manual
   steps as on Claude Code: write the note, start a fresh `codex`.
+
+### 9g. What the rollout files actually contain (answers to 9d)
+
+Read on 2026-09-17 from 4 of the 414 rollout files under
+`~/.codex/sessions/`, 1237 `token_count` records in total. Structure only -- these
+files hold real conversations, which is itself a finding (see below).
+
+Every line is `{timestamp, type, payload}`. Record types seen in one 206-line
+file: `response_item` (127), `event_msg` (72), `turn_context` (5),
+`session_meta` (1), `world_state` (1). The token numbers live in `event_msg`
+payloads of type `token_count`:
+
+    {"type":"token_count","info":{"total_token_usage":{...},"last_token_usage":{...},
+      "model_context_window":258400},"rate_limits":null}
+
+**1. No dedup is needed, and no turn accumulation either.** This is the big
+difference from Claude Code, and it makes `src/usage/codex.ts` the easy case
+§7 predicted. `info.total_token_usage` is already cumulative and rises
+monotonically (verified across all 1237 records), so the reader takes the
+**last** `token_count` record and is done: `total_token_usage` is the spend axis,
+`last_token_usage` is the context axis. There is no repeated-`usage`-per-content-block
+trap here, so nothing plays the part `message.id` dedup plays on the Claude side.
+One caveat: the **first** record can report a zero cumulative alongside a
+non-zero `last_token_usage.total_tokens` (4542 in the file read here). Read the
+last record, never the first.
+
+**2. `total_tokens` is `input_tokens + output_tokens`.** Verified
+1237/1237. The other two plausible readings are false in every single
+record: `input+output+reasoning` (0/1237) and
+`(input-cached)+output+reasoning` (0/1237). What is
+actually going on is that **both extra fields are breakdowns, not addends**:
+`cached_input_tokens <= input_tokens` in 1237/1237 records and
+`reasoning_output_tokens <= output_tokens` in 1237/1237. Summing all
+four fields, which is the obvious thing to write, overcounts by 1.96x on
+the largest file read here (14,080,016 reported vs 27,572,797 summed). This is §8c's
+`cache_creation{}`/`iterations[]` trap in a new costume; treat `total_tokens`
+as authoritative and never reconstruct it.
+
+**3. A session's file is found by id in the filename, not by date.** The name is
+`rollout-<local-timestamp>-<session-id>.jsonl` and the id matches
+`session_meta.id`, so a glob on the id is exact and needs no content scan.
+Do **not** compute the `YYYY/MM/DD` partition from a timestamp: the directory
+and the filename use **local** time while `session_meta.timestamp` is UTC. In
+the file read here that is `sessions/2026/07/22/rollout-2026-07-22T14-00-13-...`
+against `2026-07-22T10:30:13.810Z` -- a 3.5 hour gap, because this machine is
+UTC+03:30, and any naive date arithmetic lands in the wrong directory for a
+third of the day.
+
+**4. `session_meta` (line 0) is richer than expected** and carries
+`session_id`, `id`, `timestamp`, `cwd`, `originator`, `cli_version`, `source`,
+`thread_source`, `model_provider`, `base_instructions`, `history_mode`,
+`context_window`, `git`. Three of those matter: `cwd` scopes the handoff note
+without the hook having to supply it, `history_mode` is where the
+`history.persistence` gate shows up (§9e), and `context_window` corroborates
+`model_context_window`. The context axis therefore needs no
+`TOKEN_NORM_CONTEXT_LIMIT` on this host -- it is 258400 in the file read here,
+stated in every `token_count` record.
+
+**5. The format drifts across versions.** The file read here says
+`cli_version: "0.144.6"`; the installed binary is 0.146.0. Same defensive
+posture as the Claude reader: degrade to call counting, never throw.
+
+**6. Rollouts contain the full conversation.** `task_complete` payloads carry
+`last_agent_message` verbatim, and `response_item` records hold the turns. The
+reader must never log a payload and the audit must never print one -- on the
+Claude side the transcript reader only ever emitted token numbers, and that has
+to stay true here.
+
+Still open from §9d, and both need Codex's hook *input* schema rather than its
+output files: **what `SessionStart` sends** (specifically whether it carries a
+`cwd`, and its `source` enum -- Claude's is
+`["startup","resume","clear","compact","fork"]`, read out of the binary) and
+**whether `Interrupt`/`SubagentStop` need handling**. Answer those the way §8d
+was answered -- out of the binary, not the docs -- before step 11.
