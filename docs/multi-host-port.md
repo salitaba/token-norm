@@ -128,6 +128,7 @@ This must be stated plainly in the README rather than papered over.
     7. installer --host claude   DONE  merges into ~/.claude/settings.json hooks
     8. live smoke test           DONE  installed here, see 8f
     9. SessionStart injection    DONE  recovers the handoff step, see 8g
+   10-16. Codex host             NEXT  reader, adapter, installer, audit -- see 9
 
 Steps 1-4 changed no behaviour: 174 tests green before and after, and OpenCode
 still runs on the in-memory backend it always used. Do not start step 5 in the
@@ -516,3 +517,131 @@ session. The above drives the installed hook as a process with a synthetic
 `source`; only the host itself can prove it sends `source: "clear"` on a
 `/clear` and renders what comes back. A note written by this session is in place
 for exactly that test.
+
+## 9. Codex build order (steps 10-16)
+
+Written after step 9 landed and before any Codex code exists. What follows is
+the order, plus the findings from the Claude port that change it. The open
+questions in §9d must be answered from real files the way §8b and §8c were --
+not from docs, and not by assuming Codex resembles Claude Code because their
+hook config happens to share a shape.
+
+### 9a. Verified on this host (2026-09-17)
+
+    codex-cli 0.146.0                       on PATH
+    ~/.codex/hooks.json                     5270 bytes, ALREADY POPULATED
+    ~/.codex/sessions/**/rollout-*.jsonl    414 files
+    ~/.codex/config.toml                    [hooks.state], 11 trust entries
+
+The hooks file is a top-level `hooks` object with **PascalCase** event keys,
+and the group shape is the one the Claude installer already writes:
+
+    { "hooks": { "SessionStart": [ { "hooks": [ {"type":"command","command":"...","timeout":10} ] } ] } }
+
+Registered here today (orca's): SessionStart, UserPromptSubmit, PreToolUse,
+PermissionRequest, PostToolUse (2 groups), SubagentStart, SubagentStop, Stop
+(2 groups). A SessionStart group carried no `matcher` key at all, matching the
+`[event, null]` rows the Claude installer uses for session events.
+
+Two things follow that §3 does not say:
+
+- **`PermissionRequest` exists** and is absent from the matrix. token-norm does
+  not need it -- `PreToolUse` already carries the deny -- but the installer must
+  tolerate event keys it does not know rather than treat them as corruption.
+- **Several groups per event is normal**, so "append a group" is the correct
+  merge, which is what `installClaude()` already does.
+
+Trust entries are keyed by hook file path, snake_case event name, and two
+indices:
+
+    [hooks.state."/home/alitabatabaei/.codex/hooks.json:post_tool_use:0:0"]
+    [hooks.state."/home/alitabatabaei/Desktop/code/lecture-test/.codex/hooks.json:post_tool_use:0:0"]
+
+The second one is a **project-local** `.codex/hooks.json` in an unrelated repo,
+so Codex reads per-project hook files as well as the global one. Three
+consequences for step 13, and together they are why the Codex installer is not
+a copy of the Claude one:
+
+1. **The trust key contains indices.** Inserting a group anywhere but the end
+    shifts the keys of every later group and re-prompts the user to trust hooks
+    they already trusted. Append only; never sort, never reorder, never rewrite
+    an existing group to normalize its formatting.
+2. **Installing re-prompts for our own hook** -- the hash covers the command we
+    write, so this is unavoidable (§3 says so). Say it before writing, so the
+    prompt does not read as a failure.
+3. **There are two install scopes.** Global `~/.codex/hooks.json` is the default;
+    a project-local file exists as a concept. Pick global and say so.
+
+### 9b. The order
+
+    10. src/usage/codex.ts       rollout JSONL reader, same contract as claude.ts
+    11. src/hosts/codex/         protocol + measure + adapter + main, 4 files
+    12. SessionStart injection   reuse core/handoff-notes.ts, Codex closing text
+    13. installer --host codex   hooks.json, additive, append-only, re-trust note
+    14. usage-audit.py --host    JSONL reader beside the sqlite one
+    15. src/cli/hook.ts          the unified `token-norm hook <host> <event>`
+    16. live smoke test          the §8f/§8g equivalent, confirm-first
+
+One step per session, except 14+15 which are small and adjacent. Step 15 is the
+binary from §5, and it is only now justified: with two hook hosts the
+duplication is real rather than anticipated. Per §8d it must import each host's
+`main` rather than re-implement the stdin/stdout dance.
+
+### 9c. What the Claude port already settled (do not re-derive)
+
+Host-neutral, verified, and reusable as-is:
+
+- `core/handoff-notes.ts` -- note on disk, scoped by `projectSlug(cwd)`, 24h
+  TTL, consume-once by rename to `handoff.injected.md`. Nothing in it is
+  Claude-specific, **provided** Codex's SessionStart carries a `cwd` (§9d).
+- `handoffLines(sessionID, closing?)` already takes a host-specific closing.
+  Codex's says "start a fresh `codex`", not "/clear". The opencode default
+  still says "call the handoff tool" and must keep saying it.
+- Cumulative tokens feed the **spend** axis; the latest turn alone feeds the
+  **context** axis. Summing cache reads across turns reports a session that
+  never grew as half full -- there is a test pinning exactly this.
+- Subagent turns count as spend but not as this session's window.
+- Reminders go to the model via `additionalContext`. `systemMessage` renders to
+  the human only, so a reminder delivered there reaches nobody who can act.
+- Exit 0 with empty stdout when there is nothing to say. Non-zero is a hook
+  failure; 2 blocks.
+- `PostToolUse` creates the state record, not `PreToolUse`. An empty state dir
+  after a PreToolUse-only session is expected, not the missing-`save` bug.
+
+### 9d. Answer from real files before writing step 10
+
+Each of these cost a bug or a wrong assumption on the Claude side, so they are
+worth a read-only session that records its findings in a §9g first:
+
+1. **Does one assistant turn repeat its `TokenUsage` across several rollout
+    lines?** The Claude transcript does -- one line per content block, each
+    carrying the same `usage` -- and without dedup by `message.id` the reader
+    overcounted by 3.75x, measured. Find Codex's dedup key, or prove it does not
+    need one.
+2. **Is `total_tokens` the sum of the other fields, or a breakdown?** Claude's
+    `usage.iterations[]` and `cache_creation{}` looked like addends and are not.
+3. **Which rollout file belongs to the live session?** The reader gets a session
+    id from the hook; Claude hands over `transcript_path` outright, while the
+    Codex path is date-partitioned (`sessions/YYYY/MM/DD/rollout-<ts>-<id>`).
+    Globbing by id across 414 files is the fallback, not the plan.
+4. **What does SessionStart actually send?** Specifically whether it carries a
+    `cwd` (§9c depends on it) and what its `source` enum is. Claude's is
+    `["startup","resume","clear","compact","fork"]`, read out of the binary
+    rather than the docs; the adapter fails closed on an unknown value. Codex
+    needs its own enum, not Claude's.
+5. **Does `Interrupt` or `SubagentStop` need handling**, given Claude does
+    subagent detection with a matcher and Codex has explicit events?
+
+### 9e. Known degradation on Codex, stated up front
+
+- **The cost axis stays omitted.** `TokenUsage` has no prices, exactly like the
+  Claude transcript. Omitted, never reported as a zero -- a zero reads as "you
+  have spent nothing".
+- **The context axis works out of the box**, which is the one place Codex is
+  better: `model_context_window` is in the rollout, so `TOKEN_NORM_CONTEXT_LIMIT`
+  becomes an override rather than a requirement. Prefer the file's value.
+- **`history.persistence = none` leaves nothing to read.** That is the Codex
+  analogue of an unreadable transcript: degrade to call counting, report it in
+  `doctor`, and never throw.
+- **No programmatic new session** (§6), so the handoff is the same two manual
+  steps as on Claude Code: write the note, start a fresh `codex`.
