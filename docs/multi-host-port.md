@@ -719,3 +719,85 @@ output files: **what `SessionStart` sends** (specifically whether it carries a
 `["startup","resume","clear","compact","fork"]`, read out of the binary) and
 **whether `Interrupt`/`SubagentStop` need handling**. Answer those the way §8d
 was answered -- out of the binary, not the docs -- before step 11.
+
+### 9h. Codex's hook wire format, read out of the binary (answers to 9d 4-5)
+
+Read on 2026-09-17 from the native binary behind the Node launcher:
+`@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex`,
+296 MB, via `strings -n 5`. There is no `codex hooks` subcommand that dumps a
+schema, though the binary does embed a draft-07 JSON Schema for the app-server
+protocol (`SessionStartHookSpecificOutputWire`, `"const": "SessionStart"`), so
+a cleaner source may exist under `codex app-server` if this ever needs
+re-checking.
+
+The evidence is serde's concatenated field-name blob, which lists the hook
+input fields together:
+
+    session_id  transcript_path  hook_event_name  reason  permission_mode
+    turn_id  agent_transcript_path  agent_type  last_assistant_message
+
+and, immediately before it, the event names and the `source` values:
+
+    SessionEnd  startup resume clear compact  SubagentStart  SubagentStop
+
+**4. The `source` enum is `startup | resume | clear | compact` -- four values,
+and `fork` is not one of them.** Claude Code's is five
+(`["startup","resume","clear","compact","fork"]`), so §9d was right that Codex
+needs its own enum. The good news is that `resumesContext()` in
+`hosts/claude/protocol.ts` transfers unchanged as a *predicate*: it injects on
+`startup` and `clear` and skips everything else, which is the correct behaviour
+for all four Codex values, and an unknown value still fails closed. Copy the
+predicate, not the enum.
+
+**`cwd` is NOT among the hook input fields, and that changes step 12.** Claude
+Code sends one; Codex appears not to. So `core/handoff-notes.ts` cannot be
+reused as-is -- `projectSlug(cwd)` has nothing to slug. The fix uses only
+verified facts and needs no new plumbing: the input carries `transcript_path`,
+and §9g established that line 0 of a rollout is a `session_meta` record with a
+`cwd` field. So the Codex adapter resolves its own cwd by reading the first line
+of the transcript it was handed, then calls the same host-neutral note reader.
+
+Confidence, stated honestly: the field list above is positive evidence of what
+the input *has*. The absence of `cwd` is inferred from that blob, and the one
+grep that would have confirmed it independently died on a regex complexity limit
+(see the tooling note below), so step 12 should confirm absence against a real
+`SessionStart` payload before building on it. The `session_meta` fallback is
+worth writing either way, since it also covers a `cwd` that is missing or stale.
+
+**5. Subagents are structural here, and better than on Claude Code.**
+`SubagentStart` and `SubagentStop` are real events, and the input carries
+`agent_type` and `agent_transcript_path` -- so a subagent's spend can be
+attributed from the payload instead of inferred from a matcher on Task, which
+is how §8d had to do it. `Interrupt`, which §3's matrix lists beside `Stop`,
+did **not** appear among the event names in the blob (`PreToolUse`,
+`PermissionRequest`, `PostToolUse`, `PreCompact`, `SessionEnd`,
+`SubagentStart`, `SubagentStop` did). Treat that row of the matrix as
+unconfirmed rather than as a requirement.
+
+Four things fell out that were not asked for and that change later steps:
+
+- **The output wire is camelCase, like Claude's.** `HookUniversalOutputWire`
+  carries `systemMessage`, `additionalContext`, `stopReason`, `suppressOutput`
+  and `reason`. `permission_decision` appears zero times in the binary, so the
+  deny path is camelCase too. The §9c rule holds verbatim: the reminder goes in
+  `additionalContext`, never `systemMessage`.
+- **`HookHandlerConfig` accepts more than `{type, command, timeout}`**:
+  `commandWindows`, `async`, `statusMessage`, `additionalContextLimit`,
+  `description`, `matcher`, plus `prompt` and `agent` handler kinds. Two matter.
+  `additionalContextLimit` is a cap on what a hook may inject, so the reminder
+  has to fit inside it or be silently truncated -- find the default before
+  step 11. `async` would suit the audit hook, which shells out to python.
+- **Hook config entries also carry `enabled` and `trusted_hash`.** The
+  installer may write `enabled`; it must never write `trusted_hash`, which is
+  the host's own trust record (§9a).
+- **`codex --help` documents `--dangerously-bypass-hook-trust`**, which runs
+  enabled hooks without the persisted trust prompt. That makes step 16's smoke
+  test possible without re-trusting on every edit. It is a testing affordance
+  only -- the installer must never suggest it as a default, and the flag's own
+  help text calls it DANGEROUS.
+
+Tooling note, in the same spirit as §8f's `echo` trap: `grep` on this machine is
+aliased to ugrep by rtk, and a pattern with two bounded `.{0,40}` windows failed
+with `exceeds complexity limits` rather than returning no matches. A failed
+search and an empty result read identically if the stderr is not checked. Check
+it.
