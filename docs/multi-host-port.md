@@ -353,3 +353,92 @@ plainly (no host can start a session, so handoff becomes "write the note, then
 run /clear"), and that belongs with the SessionStart injection that recovers it
 -- not stapled to an installer change. Step 8 (live smoke test in a real
 session) is the next step.
+
+### 8f. What the live run showed (step 8)
+
+Claude Code 2.1.274 on this host, against the installed bundle at
+`~/.claude/token-norm/hook.mjs` and the real `~/.claude/settings.json`.
+`npm test` re-run from a removed `dist/` first: 236 passed, 17 files.
+
+**No restart was needed, and that is not what the installer says.** The merge
+was picked up by every session that was *already running* -- three of them,
+within 34 seconds, with no restart and no new session. So this host consults the
+hook config per invocation rather than caching it at startup. The install
+output's "Restart Claude Code to load it" was written from the temp-dir smoke
+test and is conservative rather than wrong; it is left in place because it is
+correct for a version that does cache, and being told to restart unnecessarily
+costs nothing while the reverse costs a silent no-op.
+
+One consequence worth knowing: a session that was already running when the hook
+lands is counted from zero at that moment, so its `calls` understates what that
+session has really spent. Only sessions that start after the install are
+accurate.
+
+**Counting across hook processes, in a real session.** Every tool call is a
+separate `node hook.mjs` process, and the count survives between them through
+the disk store: this session's record went 4 -> 6 -> 7 on consecutive reads,
+one increment per tool call, `tools` accumulating `["Bash", n]`.
+
+**Concurrent sessions do not collide.** The three live sessions were in three
+different project directories and produced three state files keyed by the host's
+`session_id`, each with its own histogram (`Read` x5, `Bash` x5, `Bash` x4).
+Attribution was checked against `~/.claude/projects/<slug>/<session-id>.jsonl`
+rather than assumed -- with three files appearing at once, guessing which one is
+"mine" is how a cross-talk bug gets recorded as working.
+
+**The announcement, at the real default threshold.** Driven on a throwaway
+session id through the installed bundle, the first non-empty stdout arrives on
+call **25** exactly, and it is shaped as 8d requires:
+
+    hookSpecificOutput.hookEventName   "PostToolUse"
+    hookSpecificOutput.additionalContext   the full <system-reminder> ... reminder
+    systemMessage                      "Token norm: ATTENTION (25 calls)"
+
+No `permissionDecision` on a PostToolUse payload, no deprecated top-level
+`decision`, and `JSON.parse` accepts the bytes. The severity line goes to the
+human, the norm goes to the model -- the inversion 8b warns about is not there.
+
+**Stop and SessionEnd.** Stop: exit 0, stdout empty -- it injects nothing, so it
+cannot continue the conversation it is trying to end. SessionEnd: exit 0, stdout
+empty, and the session's state file is gone afterwards, so the state dir does
+not grow forever.
+
+**Differs from the temp-dir smoke test: the record is created by PostToolUse,
+not PreToolUse.** A PreToolUse on an unknown session writes no file at all; the
+file appears on the first PostToolUse, because `track` is what stages an
+increment. So 8a/8d's "save at each handler's exit" does not mean "every handler
+creates the record". The first policy pass of a session therefore reads
+`calls: 0`, which is correct -- nothing has run yet -- but it means an empty
+state dir after a few PreToolUse events is not evidence of a missing save.
+
+**Install against the live file.** 0 pre-existing hook entries lost, 6 added, 17
+total, sitting beside rtk and orca; every non-hook top-level setting
+byte-identical to the pre-install snapshot (compared structurally, since a
+re-serialized diff is almost all reindentation noise). A second `install` printed
+"already registered ... refreshed the command" and left the count at 6, so
+idempotence holds on a real file and not just a fixture. `doctor --host claude`:
+ready, with the two expected warnings (cost axis inert, context axis needs
+`TOKEN_NORM_CONTEXT_LIMIT`). `uninstall --host claude --dry-run` lists all six
+events plus the hook file.
+
+**A trap in verifying this, not in the code.** Shell `echo "$out"` expands the
+`\n` escapes inside the JSON string into raw newlines, and the result fails to
+parse with `Invalid control character at ... char 91` -- char 91 being exactly
+where the first escape sits in the announcement. That looked like the hook
+emitting malformed JSON and the host silently dropping every reminder, i.e. the
+worst possible outcome, and it was the test harness. Check hook stdout by
+redirecting to a file and parsing that (`JSON.parse`, `python3 -m json.tool <
+file`); never pipe it through `echo`.
+
+**Left for normal use, not verifiable from inside one session:**
+
+- The announcement landing in a *real* session's context. The check above
+  exercises the same installed bytes at the same threshold, but a session cannot
+  cheaply drive itself to 25 calls without 17 filler calls, which is precisely
+  the spend the norm exists to prevent. The first real session that crosses 25
+  settles it; if the text appears as a reminder in context rather than only as a
+  one-line notice to the human, `additionalContext` is confirmed end to end.
+- SessionEnd on a real session (the test used a throwaway id): after closing a
+  session, its `<uuid>.json` should disappear from
+  `~/.local/state/token-norm/claude/`.
+- Stop on a real session: the observable is that the turn simply ends.
