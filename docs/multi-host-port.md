@@ -575,7 +575,7 @@ a copy of the Claude one:
 ### 9b. The order
 
     10. src/usage/codex.ts       DONE  rollout JSONL reader, same contract as claude.ts
-    11. src/hosts/codex/         NEXT  protocol + measure + adapter + main, 4 files
+    11. src/hosts/codex/         DONE  protocol + measure + adapter + main (+ index), see 9i
     12. SessionStart injection   reuse core/handoff-notes.ts, Codex closing text
     13. installer --host codex   hooks.json, additive, append-only, re-trust note
     14. usage-audit.py --host    JSONL reader beside the sqlite one
@@ -801,3 +801,74 @@ aliased to ugrep by rtk, and a pattern with two bounded `.{0,40}` windows failed
 with `exceeds complexity limits` rather than returning no matches. A failed
 search and an empty result read identically if the stderr is not checked. Check
 it.
+
+### 9i. Codex's hook wire format, from the embedded JSON Schema (step 11)
+
+§9h read serde's concatenated field-name blob. That blob is the **union over
+every struct in the module**, so it answers "which field names exist here" and
+not "does event X carry field Y" -- and §9h drew a per-event conclusion from it.
+The binary also embeds a draft-07 JSON Schema for the app-server protocol, and
+*that* is authoritative for the **output** wire. Read 2026-09-17 from the same
+296 MB binary as §9h, by dumping `strings -n 6` once to a file and re-grepping
+the dump instead of paying a minute per query.
+
+**The output wire is Claude Code's, down to the field names.**
+
+    universal:   {continue, decision, hookSpecificOutput, stopReason,
+                  suppressOutput, systemMessage, reason}
+
+    SessionStart | UserPromptSubmit | SubagentStart
+        hookSpecificOutput {hookEventName, additionalContext}
+    PostToolUse
+        hookSpecificOutput {hookEventName, additionalContext, updatedMCPToolOutput}
+    PreToolUse
+        hookSpecificOutput {hookEventName, additionalContext,
+                            permissionDecision, permissionDecisionReason, updatedInput}
+
+`PreToolUsePermissionDecisionWire` is `["allow","deny","ask"]`, verified from the
+schema -- identical to Claude's `permissionDecision`, and camelCase. So
+`injectContext()` and `denyToolCall()` port rather than being translated, and
+§9c's rule holds verbatim. Exit codes are Claude-shaped too: the binary contains
+"PreToolUse hook exited with code 2 but did not write a blocking reason to
+stderr", so 2 blocks and the exit-0 discipline in `hosts/claude/main.ts`
+transfers as-is.
+
+**Events the schema names**, a superset of §9a's registered set: SessionStart,
+SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, PermissionRequest,
+PreCompact, PostCompact, SubagentStart, SubagentStop, Stop. `Interrupt` is
+genuinely absent, confirming §9h. And **there is no `PostToolUseFailure`** -- 0
+occurrences in the binary. That is a Claude Code event, so the Claude adapter's
+failed-call branch has no counterpart here and must not be invented.
+
+**Correction to §9h: `cwd` IS in the hook input, and so is `tool_name`.** The
+blob `session_id turn_id agent_type transcript_path cwd hook_event_name model
+permission_mode trigger tool_name tool_input tool_use_id` is a PreToolUse-shaped
+input struct. §9h sampled a session-level struct, which lacks `cwd`, and
+generalised from it. There is still no *input* schema in the binary (only outputs
+are schema'd), so the session-level events remain unconfirmed -- which means the
+adapter must not depend on either answer:
+
+- `tool_name` is available on the tool events, so call counting and the
+  cheap-tool gate are the same code as on Claude Code.
+- **Do not build step 12 on cwd's absence.** `hosts/codex/adapter.ts` reads
+  `input.cwd` when it is there and falls back to `readRollout().cwd` from
+  `session_meta`. One `??`, correct under both readings, and it also covers a
+  `cwd` that is present but stale.
+
+**`additionalContextLimit`** is on `HookHandlerConfig` and has no default in the
+schema, so it is unset unless the installer writes one. Nothing to size against
+yet; revisit at step 13.
+
+**Step 11 landed.** `src/hosts/codex/{protocol,measure,adapter,main,index}.ts`,
+13 tests in `test/hosts-codex.test.ts`, suite 262 -> 275, `tsc --noEmit` clean.
+The context axis resolves `model_context_window` from the rollout with
+`TOKEN_NORM_CONTEXT_LIMIT` unset, which is §9e in one assertion. `index.ts` is a
+fifth file the §9b line did not name: step 15 imports each host's `main` through
+it, and the Claude host already has one.
+
+One trap worth naming, because the first version of the test fell into it: a
+fixture with `input_tokens: 2000` beside `cached_input_tokens: 47000` is a record
+that **cannot exist** -- §9g verified `cached <= input` in 1237/1237 records -- and
+`tokensOf()` subtracts the breakdown, so fresh input floors at zero and the
+window reads 48000 instead of 50000. Real rollouts respect the invariant; a
+hand-written stub will not unless it is told to.
