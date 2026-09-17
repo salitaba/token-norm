@@ -8,8 +8,8 @@ Reference copy for announcing `opencode-token-norm`. Not shipped in the npm tarb
 | Target | Link | State |
 | --- | --- | --- |
 | npm | https://www.npmjs.com/package/opencode-token-norm | published `0.2.1` |
-| GitHub | https://github.com/salitaba/opencode-token-norm | public |
-| Release | https://github.com/salitaba/opencode-token-norm/releases/tag/v0.2.1 | tagged |
+| GitHub | https://github.com/salitaba/token-norm | public |
+| Release | https://github.com/salitaba/token-norm/releases/tag/v0.2.1 | tagged |
 | opencode ecosystem PR | https://github.com/anomalyco/opencode/pull/48182 | open, awaiting review |
 | awesome-opencode PR | https://github.com/awesome-opencode/awesome-opencode/pull/693 | open, awaiting review |
 | Discord `#community-projects` | https://opencode.ai/discord | posted |
@@ -79,7 +79,7 @@ the bullets and never met the term. The bullets carry the argument; let them.
 > ```
 > Add to `plugin` in opencode.json.
 >
-> https://github.com/salitaba/opencode-token-norm
+> https://github.com/salitaba/token-norm
 
 ### Held back for replies
 
@@ -127,7 +127,7 @@ What I couldn't find an equivalent for is enforcement. Every option I looked at,
 **What didn't work.** Sharper prose was the first thing I tried, and it changed nothing — a stronger instruction is still an instruction, and it still loses to the task in flight. The second dead end was a bug I shipped. An early version fired the boundary reminder **61 times for a single user message**, because the dedupe compared a call count instead of message identity. That's worse than it sounds: repeated reminders become wallpaper, and the agent generalizes from "this one is noise" to ignoring the entire `system-reminder` channel — including the ones that matter. If you inject anything into an agent's context, dedupe on message identity, not on a counter, and treat your injection budget as finite.
 
 It's for opencode: `npm i opencode-token-norm`. MIT.
-https://github.com/salitaba/opencode-token-norm
+https://github.com/salitaba/token-norm
 
 Curious whether anyone has solved the override-expiry problem differently — "do everything" leaking across task boundaries feels like it should bite every agent harness, not just mine.
 
@@ -175,7 +175,7 @@ Dedupe on message id.
 `npm i opencode-token-norm`
 MIT, for @opencodeai
 
-https://github.com/salitaba/opencode-token-norm
+https://github.com/salitaba/token-norm
 
 ## Hacker News
 
@@ -191,7 +191,7 @@ A handoff tool is bundled as the escape hatch the reminders point at — it pers
 
 Design note that generalizes beyond this project: an early version fired the boundary reminder 61 times for a single user message, because the dedupe compared a call count instead of message identity. Repeated injections become wallpaper and the model generalizes to ignoring the whole `system-reminder` channel. Dedupe on message identity.
 
-MIT, targets opencode. https://github.com/salitaba/opencode-token-norm
+MIT, targets opencode. https://github.com/salitaba/token-norm
 
 ## Submitted PR bodies
 
@@ -203,7 +203,7 @@ Single row appended to the Plugins table in
 `packages/web/src/content/docs/ecosystem.mdx`, base branch `dev`:
 
 ```
-| [opencode-token-norm](https://github.com/salitaba/opencode-token-norm)                             | Enforce a token budget with self-firing cost reminders, plus a session handoff tool                |
+| [opencode-token-norm](https://github.com/salitaba/token-norm)                             | Enforce a token budget with self-firing cost reminders, plus a session handoff tool                |
 ```
 
 ### awesome-opencode/awesome-opencode#693 — `docs: add token-norm to plugins`
@@ -212,7 +212,7 @@ New file `data/plugins/token-norm.yaml`, base branch `main`:
 
 ```yaml
 name: Token Norm
-repo: https://github.com/salitaba/opencode-token-norm
+repo: https://github.com/salitaba/token-norm
 tagline: Token budget enforcement that fires on its own, plus a session handoff tool
 description: >-
   Counts tool calls per session and staples a system-reminder onto tool output

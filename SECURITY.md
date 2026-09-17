@@ -10,7 +10,7 @@ Please do not report security vulnerabilities through public GitHub issues.
 
 Use GitHub's private vulnerability reporting: open the repository's **Security** tab and click **Report a vulnerability**, or go directly to:
 
-https://github.com/salitaba/opencode-token-norm/security/advisories/new
+https://github.com/salitaba/token-norm/security/advisories/new
 
 Include as much of the following as you can:
 

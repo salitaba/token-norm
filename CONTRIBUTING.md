@@ -7,7 +7,7 @@ Thanks for taking the time to contribute to opencode-token-norm.
 Requires Node.js 22 or newer.
 
 ```bash
-git clone https://github.com/salitaba/opencode-token-norm.git
+git clone https://github.com/salitaba/token-norm.git
 cd opencode-token-norm
 npm install
 npm run build

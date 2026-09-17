@@ -37,9 +37,9 @@ Compare against the release notes table, the attached `provenance.json`, or `dis
 
 The workflow uses Trusted Publishing; there is no `NPM_TOKEN` secret.
 
-- Publisher binding: `salitaba/opencode-token-norm`, workflow file `release.yml`, permissions `publish, stage publish`.
+- Publisher binding: `salitaba/token-norm`, workflow file `release.yml`, permissions `publish, stage publish`.
 - The workflow filename is part of the binding. Renaming `release.yml` breaks publishing.
-- Configure or inspect with `npm trust list opencode-token-norm` or `npm trust github opencode-token-norm --file release.yml --repo salitaba/opencode-token-norm --allow-publish` (requires browser 2FA).
+- Configure or inspect with `npm trust list opencode-token-norm` or `npm trust github opencode-token-norm --file release.yml --repo salitaba/token-norm --allow-publish` (requires browser 2FA).
 - `--allow-publish` matters: trusted publishers created after 2026-09-03 default to stage-only, which makes `npm publish` fail. `npm trust list` must show `publish` in permissions.
 
 ## Pre-release checks

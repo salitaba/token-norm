@@ -39,7 +39,7 @@ That is worth more than a changelog entry. Repeated reminders become wallpaper, 
 
 `npm i opencode-token-norm`, add it to the `plugin` array in `opencode.json`, restart. MIT. Requires Node 22+; the audit needs `python3`.
 
-https://github.com/salitaba/opencode-token-norm
+https://github.com/salitaba/token-norm
 
 ---
 

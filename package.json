@@ -7,12 +7,12 @@
   "author": "salitaba",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/salitaba/opencode-token-norm.git"
+    "url": "git+https://github.com/salitaba/token-norm.git"
   },
   "bugs": {
-    "url": "https://github.com/salitaba/opencode-token-norm/issues"
+    "url": "https://github.com/salitaba/token-norm/issues"
   },
-  "homepage": "https://github.com/salitaba/opencode-token-norm#readme",
+  "homepage": "https://github.com/salitaba/token-norm#readme",
   "keywords": [
     "opencode",
     "opencode-plugin",

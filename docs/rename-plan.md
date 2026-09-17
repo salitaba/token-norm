@@ -119,10 +119,13 @@ publishes with a repository field pointing at a URL that no longer resolves.
    and a `bin` alias so `npx opencode-token-norm` keeps working during the window.
    Keeping both `bin` names live is what stops the rename from breaking anyone
    mid-flight.
-3. **Rename the GitHub repository.** `github.com` URLs redirect automatically;
-   `raw.githubusercontent.com` URLs **do not**. The README embeds two raw asset
-   URLs for the demo GIF and MP4, so those must be repointed in the same commit
-   or the front page loses its demo.
+3. **Rename the GitHub repository.** `github.com` URLs redirect automatically.
+   This plan originally claimed `raw.githubusercontent.com` URLs do **not**, and
+   that the README's two demo-asset URLs would therefore break. **That was
+   wrong** — measured after the rename happened on 2026-09-17, the old raw URL
+   still returns HTTP 200. Repoint them anyway so the docs do not depend on a
+   redirect that is not formally guaranteed, but the front page was never at
+   risk, and the ordering above is not as load-bearing as stated.
 4. **Sweep badges, doc URLs and prose** in current-facing docs. Leave
    `CHANGELOG.md` history and the paths listed under *What must NOT be renamed*.
 5. **Update CI** (`.github/workflows/release.yml`) and the issue template.
@@ -147,7 +150,7 @@ the rename was authored on:
 
 | Risk | Mitigation |
 |---|---|
-| `raw.githubusercontent.com` asset URLs break silently | repoint in the same commit as the GitHub rename; check the rendered README |
+| `raw.githubusercontent.com` asset URLs break silently | **Overstated — see the correction below.** Repointed anyway |
 | Existing users' `npx opencode-token-norm` breaks | keep the `bin` alias through a deprecation window |
 | Docs elsewhere (blog posts, package listings) point at the old name | the npm deprecation notice is the only lever; accept the tail |
 | Renaming a path that holds user data | the *must not rename* list above is exhaustive — cross-check against it before every edit |

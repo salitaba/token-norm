@@ -2,8 +2,8 @@
 
 [![npm version](https://img.shields.io/npm/v/opencode-token-norm)](https://www.npmjs.com/package/opencode-token-norm)
 [![npm downloads](https://img.shields.io/npm/dm/opencode-token-norm)](https://www.npmjs.com/package/opencode-token-norm)
-[![test](https://github.com/salitaba/opencode-token-norm/actions/workflows/test.yml/badge.svg)](https://github.com/salitaba/opencode-token-norm/actions/workflows/test.yml)
-[![license](https://img.shields.io/npm/l/opencode-token-norm)](https://github.com/salitaba/opencode-token-norm/blob/main/LICENSE)
+[![test](https://github.com/salitaba/token-norm/actions/workflows/test.yml/badge.svg)](https://github.com/salitaba/token-norm/actions/workflows/test.yml)
+[![license](https://img.shields.io/npm/l/opencode-token-norm)](https://github.com/salitaba/token-norm/blob/main/LICENSE)
 
 ### Your token rules are advice. This makes them mechanical.
 
@@ -21,9 +21,9 @@ behind more than one host adapter. [Host support](#host-support) is below.
 npx opencode-token-norm
 ```
 
-![token-norm demo: the agent gets counted, audited, and handed off](https://raw.githubusercontent.com/salitaba/opencode-token-norm/main/docs/assets/token-norm-demo.gif)
+![token-norm demo: the agent gets counted, audited, and handed off](https://raw.githubusercontent.com/salitaba/token-norm/main/docs/assets/token-norm-demo.gif)
 
-*([full-speed demo MP4](https://raw.githubusercontent.com/salitaba/opencode-token-norm/main/docs/assets/token-norm-demo.mp4))*
+*([full-speed demo MP4](https://raw.githubusercontent.com/salitaba/token-norm/main/docs/assets/token-norm-demo.mp4))*
 
 ## What you get
 
@@ -75,7 +75,7 @@ other hosts are ports of the same enforcement core behind a per-host adapter, an
 each one reports what it cannot measure rather than reporting a zero. The
 thresholds, the audit, the reminder text and the handoff note are host-independent;
 only the event names and the measurable axes differ. Port notes:
-[docs/multi-host-port.md](https://github.com/salitaba/opencode-token-norm/blob/main/docs/multi-host-port.md).
+[docs/multi-host-port.md](https://github.com/salitaba/token-norm/blob/main/docs/multi-host-port.md).
 
 **Codex is not installable yet, and says so.** The adapter, its measurement layer
 and the rollout reader are written and unit-tested, but there is no installer, no
@@ -105,14 +105,14 @@ hashes the installed file against the one in the package, which is the only way 
 tell a current install from a stale copy. Uninstall with
 `npx opencode-token-norm uninstall`. Requires Node ≥ 22 and an OpenCode build with
 plugin support. Requirements, verification, and troubleshooting are in the
-[install notes](https://github.com/salitaba/opencode-token-norm/blob/main/docs/install.md).
+[install notes](https://github.com/salitaba/token-norm/blob/main/docs/install.md).
 
 | Node | OpenCode | `@opencode-ai/plugin` | Token Norm |
 |---|---|---|---|
 | ≥ 22 | V1 plugin API, verified on 1.18.30 | ≥ 1.15.12 | 0.10.x |
 
 The V2 plugin API is not targeted yet. Verified builds, per-release, are in the
-[compatibility notes](https://github.com/salitaba/opencode-token-norm/blob/main/docs/compatibility.md).
+[compatibility notes](https://github.com/salitaba/token-norm/blob/main/docs/compatibility.md).
 
 ## Install on Claude Code
 
@@ -176,7 +176,7 @@ means, and a dashboard is still the passive record — this is the runtime layer
 between them. It was built against a concrete failure: a token budget written
 into `AGENTS.md`, in context for the whole session, and then 184 tool calls and
 3.0M effective fresh tokens spent on a task that should have been three sessions
-([call by call](https://github.com/salitaba/opencode-token-norm/blob/main/docs/post-mortem.md)).
+([call by call](https://github.com/salitaba/token-norm/blob/main/docs/post-mortem.md)).
 
 ## How it works
 
@@ -209,27 +209,27 @@ equivalent events under different names. What a host can measure differs — see
 - **Task boundary detection.** Past `BOUNDARY_AT` calls (default 40), a new user
   message revokes any stale "do everything" override, and the next tool call
   carries the reminder — once per user message, keyed on identity.
-  [why](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#task-boundary-detection)
+  [why](https://github.com/salitaba/token-norm/blob/main/docs/design.md#task-boundary-detection)
 - **Cost statement at 25 calls.** Once per session, the plugin demands the
   remaining calls, the caps now in effect, and which slice could ship immediately
   behind a handoff.
-  [why 25](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#why-25-and-why-once-per-session)
+  [why 25](https://github.com/salitaba/token-norm/blob/main/docs/design.md#why-25-and-why-once-per-session)
 - **Audit checkpoint every 60 calls.** The plugin runs the audit itself —
   read-only against OpenCode's sqlite DB — and staples the numbers to output the
   agent is already reading.
-  [the metric](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#the-effective-fresh-metric)
+  [the metric](https://github.com/salitaba/token-norm/blob/main/docs/design.md#the-effective-fresh-metric)
 - **Compaction context.** Compaction is the one moment an agent provably re-reads
   its own rules, so the plugin injects the call count into it.
 - **The `handoff` tool.** Persists the note before the TUI switch, opens a fresh
   session, pre-fills and submits the prompt; refused for subagents.
-  [design decisions](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#handoff-design-decisions)
+  [design decisions](https://github.com/salitaba/token-norm/blob/main/docs/design.md#handoff-design-decisions)
 - **On-demand status.** `token_norm_status` returns tool calls, context, cost and
   effective-token usage plus `policy.current` (severity now), `policy.peak`
   (severity ever), `policy.driver` (which axis) and the
   `continue | warn | handoff | block` recommendation, as read-only JSON. The
   payload is a **public interface**: stable field names within a major version,
   `peak` never below `current`, and reading it never changes it.
-  [payload and fields](https://github.com/salitaba/opencode-token-norm/blob/main/docs/how-it-works.md#the-payload)
+  [payload and fields](https://github.com/salitaba/token-norm/blob/main/docs/how-it-works.md#the-payload)
 
 **Two call counts, on purpose.** Raw per-session calls drive the behavioral
 checkpoints (25 / 40 / 60); weighted session-tree calls drive
@@ -237,16 +237,16 @@ checkpoints (25 / 40 / 60); weighted session-tree calls drive
 `calls 37` next to `budget.toolCalls: 52` is correct, not a bug — subagents
 count toward the tree, and weights scale the budget number only, never the
 thresholds.
-[weighted vs. raw](https://github.com/salitaba/opencode-token-norm/blob/main/docs/how-it-works.md#weighted-vs-raw-calls)
+[weighted vs. raw](https://github.com/salitaba/token-norm/blob/main/docs/how-it-works.md#weighted-vs-raw-calls)
 
 **Process-local by design.** Counters live in memory, not on disk: restarting
 the host resets runtime enforcement state, and the guardrails then undercount
 rather than re-firing on spend already made. The limits are not durable session
 policy.
-[why](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#session-state-and-process-boundaries)
+[why](https://github.com/salitaba/token-norm/blob/main/docs/design.md#session-state-and-process-boundaries)
 
 Full mechanism descriptions, with the exact reminder text and audit output:
-[how it works](https://github.com/salitaba/opencode-token-norm/blob/main/docs/how-it-works.md).
+[how it works](https://github.com/salitaba/token-norm/blob/main/docs/how-it-works.md).
 
 ## Evidence
 
@@ -265,14 +265,14 @@ was a harness artifact and the finding was retracted rather than kept.
 **Hypothesis, not yet demonstrated.** That the checkpoints reduce total spend.
 The behavioral data above is consistent with it and does not establish it —
 **we do not claim the plugin reduced tokens.** Method, protocol and limitations:
-[evaluation notes](https://github.com/salitaba/opencode-token-norm/blob/main/docs/evaluation.md)
-· [benchmark](https://github.com/salitaba/opencode-token-norm/blob/main/docs/benchmark.md).
+[evaluation notes](https://github.com/salitaba/token-norm/blob/main/docs/evaluation.md)
+· [benchmark](https://github.com/salitaba/token-norm/blob/main/docs/benchmark.md).
 
 > **`effective fresh tokens` ≠ total tokens the model processed.** It is
 > cost-weighted input — `input + 0.1·cache_read + 1.25·cache_write` — which
 > estimates newly-paid-for context, so sessions are comparable across cache hit
 > rates. Do not expect it to match a provider dashboard's token total.
-> [the metric](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md#the-effective-fresh-metric)
+> [the metric](https://github.com/salitaba/token-norm/blob/main/docs/design.md#the-effective-fresh-metric)
 
 ## Configuration
 
@@ -284,7 +284,7 @@ and mode — are on by default; the measured budgets (`TOKEN_NORM_MAX_COST`,
 `TOKEN_NORM_MAX_EFFECTIVE_TOKENS`, `TOKEN_NORM_MAX_TOOL_CALLS`,
 `TOKEN_NORM_CONTEXT_WARN`, `TOKEN_NORM_CONTEXT_LIMIT`) are opt-in, and unset
 means unenforced. All options and defaults:
-[configuration](https://github.com/salitaba/opencode-token-norm/blob/main/docs/configuration.md).
+[configuration](https://github.com/salitaba/token-norm/blob/main/docs/configuration.md).
 
 ## Run the audit yourself
 
@@ -296,7 +296,7 @@ python3 node_modules/opencode-token-norm/scripts/usage-audit.py --last
 
 Modes `--session`, `--top` and `--receipt` (each accepts `--json`), the
 paste-ready receipt, and the `effective fresh tokens` formula are in the
-[audit notes](https://github.com/salitaba/opencode-token-norm/blob/main/docs/audit.md).
+[audit notes](https://github.com/salitaba/token-norm/blob/main/docs/audit.md).
 
 ## Pairs with your `AGENTS.md`
 
@@ -307,21 +307,21 @@ point back at the file that does.
 
 ## Further reading
 
-- [**Design notes**](https://github.com/salitaba/opencode-token-norm/blob/main/docs/design.md)
+- [**Design notes**](https://github.com/salitaba/token-norm/blob/main/docs/design.md)
   — why the thresholds are where they are, the task-boundary model, the handoff
   decisions, session-state and safety boundaries, and what the effective-fresh
   number actually measures.
-- [**Advice vs. enforcement**](https://github.com/salitaba/opencode-token-norm/blob/main/docs/advice-vs-enforcement.md)
+- [**Advice vs. enforcement**](https://github.com/salitaba/token-norm/blob/main/docs/advice-vs-enforcement.md)
   — the rule-by-rule case for why a norm sitting in context is not a norm, and
   the answer to "isn't this just prompt engineering?"
-- [**Post-mortem**](https://github.com/salitaba/opencode-token-norm/blob/main/docs/post-mortem.md)
+- [**Post-mortem**](https://github.com/salitaba/token-norm/blob/main/docs/post-mortem.md)
   — the session that audited itself, reported 3.0M tokens of waste, and kept
   going anyway. Every threshold here traces back to a specific moment in it.
 
 ## Links
 
-- [Source](https://github.com/salitaba/opencode-token-norm) · [Issues](https://github.com/salitaba/opencode-token-norm/issues) · [npm](https://www.npmjs.com/package/opencode-token-norm)
-- [Changelog](https://github.com/salitaba/opencode-token-norm/blob/main/CHANGELOG.md) · [Contributing](https://github.com/salitaba/opencode-token-norm/blob/main/CONTRIBUTING.md) · [Security](https://github.com/salitaba/opencode-token-norm/blob/main/SECURITY.md)
+- [Source](https://github.com/salitaba/token-norm) · [Issues](https://github.com/salitaba/token-norm/issues) · [npm](https://www.npmjs.com/package/opencode-token-norm)
+- [Changelog](https://github.com/salitaba/token-norm/blob/main/CHANGELOG.md) · [Contributing](https://github.com/salitaba/token-norm/blob/main/CONTRIBUTING.md) · [Security](https://github.com/salitaba/token-norm/blob/main/SECURITY.md)
 - If this plugin saved you tokens, a star helps others find it.
 
 ## License
